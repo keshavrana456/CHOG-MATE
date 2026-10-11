@@ -73,5 +73,12 @@
     "vite": "catalog:",
     "wouter": "^3.3.5",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "@reown/appkit": "^1.8.24",
+    "@reown/appkit-adapter-wagmi": "^1.8.24",
+    "@supabase/supabase-js": "^2.117.3",
+    "viem": "^2.57.4",
+    "wagmi": "^3.7.7"
   }
 }
