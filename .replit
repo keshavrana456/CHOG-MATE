@@ -18,3 +18,10 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+VITE_SUPABASE_URL = "https://ngsvenudlagubljtcvok.supabase.co"
+VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5nc3ZlbnVkbGFndWJsanRjdm9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyOTQ3NDAsImV4cCI6MjA5NDg3MDc0MH0.zHjLLngi6RRzBw-lvOnD13o6Zs3zlISS7hYKg3JisSg"
+VITE_WALLETCONNECT_PROJECT_ID = "371cd4b37d231592ce0ee8ee8dee6ba4"
