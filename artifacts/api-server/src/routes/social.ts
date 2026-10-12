@@ -470,7 +470,10 @@ function sendSocialError(req: Request, res: Response, error: unknown): void {
     });
     return;
   }
-  req.log.error({ err: error }, "Social service failed");
+  req.log.error(
+    { errorType: error instanceof Error ? error.name : "UnknownError" },
+    "Social service failed",
+  );
   res.status(503).json({ error: "This action is temporarily unavailable. Please try again." });
 }
 

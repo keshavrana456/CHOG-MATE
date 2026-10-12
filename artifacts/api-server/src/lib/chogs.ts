@@ -1,11 +1,8 @@
 import {
   createPublicClient,
-  decodeEventLog,
   defineChain,
   http,
-  parseAbiItem,
   type Address,
-  type Log,
 } from "viem";
 
 export const CHOG_CONTRACT_ADDRESS = (
@@ -13,27 +10,44 @@ export const CHOG_CONTRACT_ADDRESS = (
   "0xc96d31f8626c6d03fae5dcd3d61e3fb9f4a73763"
 ) as Address;
 
+function resolveMonadRpcUrl(): string {
+  const configured = process.env.MONAD_RPC_URL;
+  if (!configured) return "https://rpc.monad.xyz";
+
+  const assignment = configured.trim().match(/^(?:VITE_)?MONAD_RPC_URL\s*=\s*(.*)$/i);
+  const value = (assignment?.[1] ?? configured).trim();
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("MONAD_RPC_URL must be a valid HTTP or HTTPS URL.");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("MONAD_RPC_URL must be a valid HTTP or HTTPS URL.");
+  }
+  return url.toString();
+}
+
+const monadRpcUrl = resolveMonadRpcUrl();
+
 const monad = defineChain({
   id: 143,
   name: "Monad",
   nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
   rpcUrls: {
-    default: { http: [process.env.MONAD_RPC_URL ?? "https://rpc.monad.xyz"] },
+    default: { http: [monadRpcUrl] },
   },
   testnet: false,
 });
 
 const publicClient = createPublicClient({
   chain: monad,
-  transport: http(process.env.MONAD_RPC_URL ?? "https://rpc.monad.xyz", {
+  transport: http(monadRpcUrl, {
     timeout: 20_000,
     retryCount: 1,
   }),
 });
 
-const transferEvent = parseAbiItem(
-  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
-);
 const erc721Abi = [
   {
     type: "function",
@@ -41,6 +55,13 @@ const erc721Abi = [
     stateMutability: "view",
     inputs: [{ name: "owner", type: "address" }],
     outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "tokensOfOwner",
+    stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }],
+    outputs: [{ name: "ids", type: "uint256[]" }],
   },
   {
     type: "function",
@@ -93,8 +114,6 @@ const metadataCache = new Map<string, { expiresAt: number; value: Metadata | nul
 const activeOwnershipRequests = new Map<string, Promise<ChogToken[]>>();
 const OWNERSHIP_TTL_MS = 30_000;
 const METADATA_TTL_MS = 6 * 60 * 60 * 1000;
-const TRANSFER_RANGE_SIZE = 10_000n;
-const MAX_SCANNED_BLOCKS = 20_000_000n;
 
 export async function getOwnedChogs(walletAddress: Address): Promise<ChogToken[]> {
   const wallet = walletAddress.toLowerCase();
@@ -175,73 +194,33 @@ async function loadOwnedChogs(walletAddress: Address): Promise<ChogToken[]> {
   });
   if (balance === 0n) return [];
 
-  const latestBlock = await publicClient.getBlockNumber();
-  if (latestBlock > MAX_SCANNED_BLOCKS) {
-    throw new Error("The configured NFT indexer does not support this collection history.");
+  const ids = await publicClient.readContract({
+    address: CHOG_CONTRACT_ADDRESS,
+    abi: erc721Abi,
+    functionName: "tokensOfOwner",
+    args: [walletAddress],
+  });
+  if (BigInt(ids.length) !== balance) {
+    throw new Error("The Chog contract returned an inconsistent ownership list.");
   }
 
-  const currentOwners = new Map<string, string>();
-  let fromBlock = 0n;
-  while (fromBlock <= latestBlock) {
-    const toBlock =
-      fromBlock + TRANSFER_RANGE_SIZE - 1n > latestBlock
-        ? latestBlock
-        : fromBlock + TRANSFER_RANGE_SIZE - 1n;
-    const [incoming, outgoing] = await getTransferLogs(walletAddress, fromBlock, toBlock);
-    const uniqueLogs = new Map<string, Log>();
-    for (const log of [...incoming, ...outgoing]) {
-      uniqueLogs.set(`${log.transactionHash}:${log.logIndex}`, log);
-    }
-    const ordered = [...uniqueLogs.values()].sort((a, b) => {
-      const blockDiff = Number((a.blockNumber ?? 0n) - (b.blockNumber ?? 0n));
-      if (blockDiff !== 0) return blockDiff;
-      return Number((a.logIndex ?? 0) - (b.logIndex ?? 0));
-    });
-
-    for (const log of ordered) {
-      const decoded = decodeEventLog({
-        abi: [transferEvent],
-        data: log.data,
-        topics: log.topics,
-      });
-      const tokenId = decoded.args.tokenId.toString();
-      const from = decoded.args.from.toLowerCase();
-      const to = decoded.args.to.toLowerCase();
-      if (!tokenId || !from || !to) continue;
-      if (to === walletAddress.toLowerCase()) currentOwners.set(tokenId, to);
-      if (from === walletAddress.toLowerCase() && to !== walletAddress.toLowerCase()) {
-        currentOwners.delete(tokenId);
-      }
-    }
-    fromBlock = toBlock + 1n;
-  }
-
-  const ids = [...currentOwners.keys()];
-  const verified = await Promise.all(
-    ids.map(async (tokenId) => {
-      try {
-        const owner = await publicClient.readContract({
-          address: CHOG_CONTRACT_ADDRESS,
-          abi: erc721Abi,
-          functionName: "ownerOf",
-          args: [BigInt(tokenId)],
-        });
-        return owner.toLowerCase() === walletAddress.toLowerCase() ? tokenId : null;
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const ownedIds = verified.filter((id): id is string => id !== null);
   const tokens = await Promise.all(
-    ownedIds.map(async (tokenId): Promise<ChogToken> => {
-      const tokenNumber = BigInt(tokenId);
+    ids.map(async (tokenNumber): Promise<ChogToken> => {
+      const owner = await publicClient.readContract({
+        address: CHOG_CONTRACT_ADDRESS,
+        abi: erc721Abi,
+        functionName: "ownerOf",
+        args: [tokenNumber],
+      });
+      if (owner.toLowerCase() !== walletAddress.toLowerCase()) {
+        throw new Error("The Chog contract returned a token owned by another wallet.");
+      }
       const [metadata, metadataUrl] = await Promise.all([
         readTokenMetadata(tokenNumber),
         tokenMetadataUrl(tokenNumber),
       ]);
       return {
-        tokenId,
+        tokenId: tokenNumber.toString(),
         contractAddress: CHOG_CONTRACT_ADDRESS,
         ownerWallet: walletAddress,
         verified: true,
@@ -253,39 +232,6 @@ async function loadOwnedChogs(walletAddress: Address): Promise<ChogToken[]> {
     }),
   );
   return tokens.sort((a, b) => BigInt(a.tokenId) < BigInt(b.tokenId) ? -1 : 1);
-}
-
-async function getTransferLogs(
-  walletAddress: Address,
-  fromBlock: bigint,
-  toBlock: bigint,
-): Promise<[Log[], Log[]]> {
-  try {
-    return await Promise.all([
-      publicClient.getLogs({
-        address: CHOG_CONTRACT_ADDRESS,
-        event: transferEvent,
-        args: { to: walletAddress },
-        fromBlock,
-        toBlock,
-      }),
-      publicClient.getLogs({
-        address: CHOG_CONTRACT_ADDRESS,
-        event: transferEvent,
-        args: { from: walletAddress },
-        fromBlock,
-        toBlock,
-      }),
-    ]);
-  } catch (error) {
-    if (toBlock - fromBlock <= 128n) throw error;
-    const midpoint = fromBlock + (toBlock - fromBlock) / 2n;
-    const [left, right] = await Promise.all([
-      getTransferLogs(walletAddress, fromBlock, midpoint),
-      getTransferLogs(walletAddress, midpoint + 1n, toBlock),
-    ]);
-    return [[...left[0], ...right[0]], [...left[1], ...right[1]]];
-  }
 }
 
 async function tokenMetadataUrl(tokenId: bigint): Promise<string | null> {

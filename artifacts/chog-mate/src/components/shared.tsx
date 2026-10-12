@@ -22,29 +22,29 @@ export function AppShell({ children, displayName }: { children: ReactNode; displ
   return <div className="app-shell grain relative">
     <header className="topbar relative z-20 sticky top-0">
       <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-5 md:px-9">
-        <Brand />
-        <nav className="hidden items-center gap-1 md:flex" aria-label="Main navigation">
-          {links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase().replace(' ', '-')}`} className={`nav-link flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold ${path === href ? 'active' : ''}`}><Icon size={15} strokeWidth={2.2} />{label}</Link>)}
+        <Brand inverse />
+        <nav className="nav-glass hidden items-center gap-1 rounded-full p-1 md:flex" aria-label="Main navigation">
+          {links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} data-testid={`link-nav-${label.toLowerCase().replace(' ', '-')}`} className={`nav-link flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold ${path === href ? 'active' : ''}`}><Icon size={15} strokeWidth={2.2} />{label}</Link>)}
         </nav>
         <div className="flex items-center gap-2">
-          <Link href="/profile" className="hidden rounded-full px-4 py-2 text-[13px] font-semibold text-[#594c67] transition hover:bg-[#f2ecff] sm:block" data-testid="link-edit-profile">{displayName ? `Hi, ${displayName}` : 'Your profile'}</Link>
-          <Link href="/settings" className="grid h-10 w-10 place-items-center rounded-full border border-[#e9e0d3] bg-[#fffdf8] text-[#554866] transition hover:border-[#b8a7ff]" aria-label="Settings" data-testid="link-settings"><Settings size={16}/></Link>
+          <Link href="/profile" className="header-profile-link hidden rounded-full px-4 py-2 text-[13px] font-semibold transition sm:block" data-testid="link-edit-profile">{displayName ? `Hi, ${displayName}` : 'Your profile'}</Link>
+          <Link href="/settings" className="glass-icon-button grid h-10 w-10 place-items-center rounded-full transition" aria-label="Settings" data-testid="link-settings"><Settings size={16}/></Link>
         </div>
       </div>
     </header>
     <main className="relative z-[1] mx-auto w-full max-w-[1440px] px-5 pb-28 pt-7 md:px-9 md:pb-12 md:pt-10">{children}</main>
-    <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-7 border-t border-[#24133f12] bg-[#fffdf8ed] px-1 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden" aria-label="Mobile navigation">
-      {[{ href: '/', label: 'Home', icon: Sparkles }, ...links, {href:'/profile',label:'Profile',icon:UserRound},{href:'/settings',label:'Settings',icon:Settings}].map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={`flex flex-col items-center gap-1 rounded-xl py-1.5 text-[9px] font-semibold ${path === href ? 'text-[#7047ff]' : 'text-[#80758b]'}`} data-testid={`mobile-nav-${label.toLowerCase().replace(' ', '-')}`}><Icon size={18} strokeWidth={2} />{label}</Link>)}
+    <nav className="mobile-tabbar fixed bottom-0 left-0 right-0 z-30 grid grid-cols-7 px-1 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 md:hidden" aria-label="Mobile navigation">
+      {[{ href: '/', label: 'Home', icon: Sparkles }, ...links, {href:'/profile',label:'Profile',icon:UserRound},{href:'/settings',label:'Settings',icon:Settings}].map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} className={`mobile-tab flex flex-col items-center gap-1 rounded-xl py-1.5 text-[9px] font-semibold ${path === href ? 'active' : ''}`} data-testid={`mobile-nav-${label.toLowerCase().replace(' ', '-')}`}><Icon size={18} strokeWidth={2} />{label}</Link>)}
     </nav>
   </div>;
 }
 
 export function Eyebrow({ children }: { children: ReactNode }) {
-  return <div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.17em] text-[#805ee0]"><span className="h-1.5 w-1.5 rounded-full bg-[#8a63ff]" />{children}</div>;
+  return <div className="eyebrow mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.17em]"><span className="h-1.5 w-1.5 rounded-full bg-[#a982ff]" />{children}</div>;
 }
 
 export function PageTitle({ eyebrow, title, description, action }: { eyebrow: string; title: string; description?: string; action?: ReactNode }) {
-  return <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><Eyebrow>{eyebrow}</Eyebrow><h1 className="display text-[38px] font-extrabold leading-[1.04] text-[#24133f] sm:text-[48px]" data-testid="heading-page">{title}</h1>{description && <p className="mt-3 max-w-xl text-[15px] leading-6 text-[#7d7188]">{description}</p>}</div>{action}</div>;
+  return <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><Eyebrow>{eyebrow}</Eyebrow><h1 className="display text-[38px] font-extrabold leading-[1.04] text-white sm:text-[48px]" data-testid="heading-page">{title}</h1>{description && <p className="mt-3 max-w-xl text-[15px] leading-6 text-violet-100/75">{description}</p>}</div>{action}</div>;
 }
 
 export function EmptyState({ mark = 'cm', title, detail, action }: { mark?: string; title: string; detail: string; action?: ReactNode }) {

@@ -246,10 +246,39 @@ alter table public.reports enable row level security;
 alter table public.blocks enable row level security;
 alter table public.calls enable row level security;
 
-grant select, insert, update, delete on all tables in schema public to authenticated;
-grant usage, select on all sequences in schema public to authenticated;
-grant all on all tables in schema public to service_role;
-grant usage, select on all sequences in schema public to service_role;
+grant select, insert, update, delete on table
+  public.users,
+  public.profiles,
+  public.chogs,
+  public.chog_traits,
+  public.preferences,
+  public.likes,
+  public.passes,
+  public.super_likes,
+  public.matches,
+  public.messages,
+  public.notifications,
+  public.reports,
+  public.blocks,
+  public.calls
+to authenticated;
+
+grant all privileges on table
+  public.users,
+  public.profiles,
+  public.chogs,
+  public.chog_traits,
+  public.preferences,
+  public.likes,
+  public.passes,
+  public.super_likes,
+  public.matches,
+  public.messages,
+  public.notifications,
+  public.reports,
+  public.blocks,
+  public.calls
+to service_role;
 
 drop policy if exists users_read_self on public.users;
 create policy users_read_self on public.users for select to authenticated using (id = auth.uid());

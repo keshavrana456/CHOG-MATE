@@ -15,15 +15,15 @@ export const monadNetwork = defineChain({
 });
 
 export const walletConnectConfigured = Boolean(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID);
-
-if (walletConnectConfigured) {
-  const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
-  const wagmiAdapter = new WagmiAdapter({
-    projectId,
-    networks: [monadNetwork],
-  });
-  createAppKit({
-    adapters: [wagmiAdapter],
+const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
+export const appKit = projectId
+  ? createAppKit({
+    adapters: [
+      new WagmiAdapter({
+        projectId,
+        networks: [monadNetwork],
+      }),
+    ],
     projectId,
     networks: [monadNetwork],
     metadata: {
@@ -34,5 +34,5 @@ if (walletConnectConfigured) {
     },
     themeMode: "light",
     features: { analytics: false },
-  });
-}
+  })
+  : null;

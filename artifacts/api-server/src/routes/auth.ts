@@ -77,7 +77,10 @@ router.post("/auth/verify", async (req, res): Promise<void> => {
       }),
     );
   } catch (error) {
-    req.log.warn({ err: error }, "Wallet verification failed");
+    req.log.warn(
+      { errorType: error instanceof Error ? error.name : "UnknownError" },
+      "Wallet verification failed",
+    );
     if (error instanceof Error && error.message.includes("Challenge")) {
       res.status(401).json({ error: "Your wallet request expired. Please try again." });
       return;

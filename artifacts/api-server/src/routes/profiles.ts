@@ -277,7 +277,10 @@ function sendProfileError(
     });
     return;
   }
-  req.log.error({ err: error }, "Profile service failed");
+  req.log.error(
+    { errorType: error instanceof Error ? error.name : "UnknownError" },
+    "Profile service failed",
+  );
   res.status(503).json({
     error: "Your profile service is temporarily unavailable. Please try again.",
   });

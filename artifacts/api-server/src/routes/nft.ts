@@ -28,7 +28,10 @@ router.get("/nft/ownership/:walletAddress", async (req, res): Promise<void> => {
       }),
     );
   } catch (error) {
-    req.log.warn({ err: error }, "Chog ownership lookup unavailable");
+    req.log.warn(
+      { errorType: error instanceof Error ? error.name : "UnknownError" },
+      "Chog ownership lookup unavailable",
+    );
     res.status(503).json({
       error: "Chog ownership is temporarily unavailable. Please try again.",
     });
@@ -50,7 +53,10 @@ router.get("/nft/tokens/:tokenId", async (req, res): Promise<void> => {
     }
     res.json(GetChogResponse.parse(chog));
   } catch (error) {
-    req.log.warn({ err: error }, "Chog token metadata unavailable");
+    req.log.warn(
+      { errorType: error instanceof Error ? error.name : "UnknownError" },
+      "Chog token metadata unavailable",
+    );
     res.status(503).json({
       error: "Chog metadata is temporarily unavailable. Please try again.",
     });
