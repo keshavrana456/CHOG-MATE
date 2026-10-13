@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { ArrowDownRight, BadgeCheck, Heart, ShieldCheck, Sparkles } from 'lucide-react';
 import { useHealthCheck } from '@workspace/api-client-react';
 import { AppShell, ChogArtwork, Eyebrow } from '@/components/shared';
+import { ChogCollectionGallery } from '@/components/chog-collection-gallery';
 const WalletAuthPanel = lazy(() => import('@/components/wallet-auth'));
 
 export default function HomePage() {
@@ -53,5 +54,6 @@ export default function HomePage() {
     <section className="mx-auto grid max-w-[1240px] gap-4 border-t border-white/15 py-8 sm:grid-cols-3">
       {[['01','Bring your Chog','Your wallet is your proof. No made-up profiles, no guesswork.'],['02','Find your people','Meet verified holders looking for the same kind of connection.'],['03','Make it mutual','A match only happens when the feeling goes both ways.']].map(([n,title,copy])=><div key={n} className="flex gap-4 rounded-2xl px-2 py-3"><span className="display text-sm font-extrabold text-[#c5a4ff]">{n}</span><div><h2 className="display font-extrabold text-white">{title}</h2><p className="mt-1 text-sm leading-5 text-violet-100/70">{copy}</p></div></div>)}
     </section>
+    <ChogCollectionGallery />
   </AppShell>;
 }

@@ -51,6 +51,13 @@ const publicClient = createPublicClient({
 const erc721Abi = [
   {
     type: "function",
+    name: "totalSupply",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "balanceOf",
     stateMutability: "view",
     inputs: [{ name: "owner", type: "address" }],
@@ -114,6 +121,22 @@ const metadataCache = new Map<string, { expiresAt: number; value: Metadata | nul
 const activeOwnershipRequests = new Map<string, Promise<ChogToken[]>>();
 const OWNERSHIP_TTL_MS = 30_000;
 const METADATA_TTL_MS = 6 * 60 * 60 * 1000;
+let collectionSupplyCache: { expiresAt: number; value: string } | null = null;
+
+export async function getChogCollectionSupply(): Promise<string> {
+  if (collectionSupplyCache && collectionSupplyCache.expiresAt > Date.now()) {
+    return collectionSupplyCache.value;
+  }
+
+  const supply = await publicClient.readContract({
+    address: CHOG_CONTRACT_ADDRESS,
+    abi: erc721Abi,
+    functionName: "totalSupply",
+  });
+  const value = supply.toString();
+  collectionSupplyCache = { value, expiresAt: Date.now() + 5 * 60 * 1000 };
+  return value;
+}
 
 export async function getOwnedChogs(walletAddress: Address): Promise<ChogToken[]> {
   const wallet = walletAddress.toLowerCase();

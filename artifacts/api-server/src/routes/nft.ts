@@ -6,9 +6,54 @@ import {
   GetNftOwnershipResponse,
 } from "@workspace/api-zod";
 import { getAddress } from "viem";
-import { getChog, getOwnedChogs } from "../lib/chogs";
+import {
+  getChog,
+  getChogCollectionSupply,
+  getOwnedChogs,
+} from "../lib/chogs";
+import {
+  getChogCollectionPage,
+  NftIndexerError,
+} from "../lib/opensea";
 
 const router: IRouter = Router();
+
+router.get("/nft/collection", async (req, res): Promise<void> => {
+  const limit = Number(req.query.limit ?? 50);
+  const cursor = req.query.next;
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 50 ||
+    (cursor !== undefined &&
+      (typeof cursor !== "string" || cursor.length > 2_000))
+  ) {
+    res.status(400).json({ error: "Invalid collection page request." });
+    return;
+  }
+
+  try {
+    const page = await getChogCollectionPage(
+      limit,
+      typeof cursor === "string" ? cursor : undefined,
+    );
+    const total = await getChogCollectionSupply().catch(() => null);
+    res.json({
+      ...page,
+      total: total === null ? null : Number(total),
+    });
+  } catch (error) {
+    const statusCode =
+      error instanceof NftIndexerError ? error.statusCode : 503;
+    req.log.warn(
+      { statusCode },
+      "Chog Genesis collection index lookup unavailable",
+    );
+    res.status(statusCode).json({
+      error: "The Chog Genesis collection is temporarily unavailable. Please try again.",
+    });
+  }
+});
 
 router.get("/nft/ownership/:walletAddress", async (req, res): Promise<void> => {
   const parsed = GetNftOwnershipParams.safeParse(req.params);
