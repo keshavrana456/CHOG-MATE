@@ -35,7 +35,7 @@ router.get("/me", async (req, res): Promise<void> => {
     const profile =
       bundle && selected
         ? {
-            ...profileToApi(bundle),
+            ...profileToApi(bundle, null, [], true),
             chog: selected,
           }
         : null;
@@ -82,6 +82,9 @@ router.put("/me/profile", async (req, res): Promise<void> => {
         user_id: session.userId,
         username: parsed.data.username,
         display_name: parsed.data.displayName,
+        name: parsed.data.name ?? null,
+        gender: parsed.data.gender ?? null,
+        age: parsed.data.age ?? null,
         bio: parsed.data.bio ?? null,
         location: parsed.data.location ?? null,
         timezone: parsed.data.timezone ?? null,
@@ -120,7 +123,7 @@ router.put("/me/profile", async (req, res): Promise<void> => {
 
     const bundle = await loadProfileBundle(session.userId, selectedChog.tokenId);
     if (!bundle) throw new SocialDataError("Your verified Chog could not be loaded.");
-    res.json(UpdateMeProfileResponse.parse(profileToApi(bundle)));
+    res.json(UpdateMeProfileResponse.parse(profileToApi(bundle, null, [], true)));
   } catch (error) {
     sendProfileError(req, res, error);
   }
@@ -237,7 +240,7 @@ router.get("/discover", async (req, res): Promise<void> => {
     res.json(
       DiscoverProfilesResponse.parse({
         profiles: ranked.slice(0, limit).map(({ bundle, score, reasons }) =>
-          profileToApi(bundle, score, reasons),
+          profileToApi(bundle, score, reasons, parsed.data.mode === "date"),
         ),
         nextCursor: hasMoreCandidates ? String(offset + pageSize) : null,
       }),

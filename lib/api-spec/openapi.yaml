@@ -101,6 +101,38 @@ paths:
                 $ref: "#/components/schemas/NftOwnership"
         "503":
           description: NFT indexer is unavailable
+  /nft/live-sales:
+    get:
+      operationId: getLiveSales
+      tags: [nft]
+      summary: Get recent real Chog Genesis sales
+      responses:
+        "200":
+          description: Recent indexed sales
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveSales"
+        "503":
+          description: Marketplace data is not configured
+        "502":
+          description: Marketplace data is unavailable
+  /nft/collection-stats:
+    get:
+      operationId: getCollectionStats
+      tags: [nft]
+      summary: Get verified Chog Genesis collection statistics
+      responses:
+        "200":
+          description: Current collection statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionStats"
+        "503":
+          description: Marketplace data is not configured
+        "502":
+          description: Marketplace data is unavailable
   /nft/tokens/{tokenId}:
     get:
       operationId: getChog
@@ -352,6 +384,40 @@ components:
         chogs:
           type: array
           items: { $ref: "#/components/schemas/Chog" }
+    PriceMetric:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount: { type: string }
+        currency: { type: string }
+    LiveSale:
+      type: object
+      required: [tokenId, imageUrl, price, currency, marketplace, saleUrl, timestamp]
+      properties:
+        tokenId: { type: string }
+        imageUrl: { type: string, format: uri }
+        price: { type: string }
+        currency: { type: string }
+        marketplace: { type: ["string", "null"] }
+        saleUrl: { type: string, format: uri }
+        timestamp: { type: string, format: date-time }
+    LiveSales:
+      type: object
+      required: [sales, updatedAt]
+      properties:
+        sales:
+          type: array
+          items: { $ref: "#/components/schemas/LiveSale" }
+        updatedAt: { type: string, format: date-time }
+    CollectionStats:
+      type: object
+      required: [floorPrice, topFloor, totalVolume, totalHolders, updatedAt]
+      properties:
+        floorPrice: { oneOf: [{ $ref: "#/components/schemas/PriceMetric" }, { type: "null" }] }
+        topFloor: { oneOf: [{ $ref: "#/components/schemas/PriceMetric" }, { type: "null" }] }
+        totalVolume: { oneOf: [{ $ref: "#/components/schemas/PriceMetric" }, { type: "null" }] }
+        totalHolders: { type: ["integer", "null"], minimum: 0 }
+        updatedAt: { type: string, format: date-time }
     Chog:
       type: object
       required: [tokenId, contractAddress, ownerWallet, verified]
@@ -375,11 +441,14 @@ components:
         rarity: { type: ["number", "null"], minimum: 0, maximum: 100 }
     Profile:
       type: object
-      required: [userId, username, displayName, walletAddress, chog, interests, skills, lookingFor]
+      required: [userId, username, displayName, name, gender, age, walletAddress, chog, interests, skills, lookingFor]
       properties:
         userId: { type: string, format: uuid }
         username: { type: string }
         displayName: { type: string }
+        name: { type: ["string", "null"] }
+        gender: { type: ["string", "null"] }
+        age: { type: ["integer", "null"], minimum: 18, maximum: 120 }
         walletAddress: { type: string }
         bio: { type: ["string", "null"] }
         location: { type: ["string", "null"] }
@@ -416,6 +485,9 @@ components:
       properties:
         username: { type: string, minLength: 2, maxLength: 24, pattern: "^[a-zA-Z0-9_]+$" }
         displayName: { type: string, minLength: 1, maxLength: 48 }
+        name: { type: ["string", "null"], maxLength: 80 }
+        gender: { type: ["string", "null"], maxLength: 50 }
+        age: { type: ["integer", "null"], minimum: 18, maximum: 120 }
         bio: { type: ["string", "null"], maxLength: 500 }
         location: { type: ["string", "null"], maxLength: 100 }
         timezone: { type: ["string", "null"], maxLength: 100 }

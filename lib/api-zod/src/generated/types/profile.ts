@@ -11,6 +11,16 @@ export interface Profile {
   userId: string;
   username: string;
   displayName: string;
+  /** @nullable */
+  name: string | null;
+  /** @nullable */
+  gender: string | null;
+  /**
+     * @minimum 18
+     * @maximum 120
+     * @nullable
+     */
+  age: number | null;
   walletAddress: string;
   /** @nullable */
   bio?: string | null;

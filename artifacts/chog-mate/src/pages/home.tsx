@@ -1,59 +1,478 @@
 import { lazy, Suspense, useState } from 'react';
-import { ArrowDownRight, BadgeCheck, Heart, ShieldCheck, Sparkles } from 'lucide-react';
-import { useHealthCheck } from '@workspace/api-client-react';
-import { AppShell, ChogArtwork, Eyebrow } from '@/components/shared';
-import { ChogCollectionGallery } from '@/components/chog-collection-gallery';
+import {
+  ArrowDownRight,
+  ArrowRight,
+  BadgeCheck,
+  Heart,
+  ImageOff,
+  MessageCircleHeart,
+  ShieldCheck,
+  Sparkles,
+  UsersRound,
+} from 'lucide-react';
+import {
+  getGetCollectionStatsQueryKey,
+  getGetLiveSalesQueryKey,
+  useGetCollectionStats,
+  useGetLiveSales,
+} from '@workspace/api-client-react';
+import { AppShell, Eyebrow } from '@/components/shared';
+
 const WalletAuthPanel = lazy(() => import('@/components/wallet-auth'));
+const chogGif = `${import.meta.env.BASE_URL}chog-idle.gif`;
 
 export default function HomePage() {
   const [showWallet, setShowWallet] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const health = useHealthCheck();
+  const sales = useGetLiveSales({
+    query: { queryKey: getGetLiveSalesQueryKey(), refetchInterval: 60_000, retry: 1 },
+  });
+  const stats = useGetCollectionStats({
+    query: { queryKey: getGetCollectionStatsQueryKey(), refetchInterval: 120_000, retry: 1 },
+  });
 
   function connect() {
     setFeedback('');
-    if (!import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-      setFeedback('Wallet connection is not configured yet. Please try again later.');
+    if (
+      !import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ||
+      !import.meta.env.VITE_SUPABASE_URL ||
+      !import.meta.env.VITE_SUPABASE_ANON_KEY
+    ) {
+      setFeedback('Wallet sign-in is not configured yet. Please try again later.');
       return;
     }
     setShowWallet(true);
   }
 
-  return <AppShell>
-    <section className="mx-auto grid max-w-[1240px] items-center gap-12 pb-10 pt-9 md:min-h-[calc(100dvh-120px)] md:grid-cols-[1.08fr_.92fr] md:gap-6 md:pt-0">
-      <div className="page-enter relative z-[1] max-w-[620px]">
-        {health.isError && <p className="mb-4 rounded-2xl border border-[#edc8bc] bg-[#fff2ec] px-4 py-3 text-xs leading-5 text-[#8b4232]" role="status" data-testid="status-service">CHOG MATE’s service isn’t responding right now. Wallet verification may be unavailable until it’s back.</p>}
-        <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-2 text-xs font-semibold text-violet-50 shadow-[inset_0_1px_0_rgba(255,255,255,.12)] backdrop-blur-xl"><span className="grid h-5 w-5 place-items-center rounded-full bg-white/15 text-[#d5bdff]"><ShieldCheck size={12} /></span>For verified Chog Genesis holders</div>
-        <h1 className="display text-[54px] font-extrabold leading-[.97] tracking-[-.065em] text-white sm:text-[76px] lg:text-[92px]" data-testid="heading-home">MEET YOUR<br /><span className="relative inline-block text-[#c9a9ff]">CHOG MATE<span className="absolute -right-7 top-1 text-[#ffb568]"><Sparkles size={22} /></span></span><span className="text-white">.</span></h1>
-        <div className="mt-7 flex items-center gap-3"><span className="h-px w-10 bg-[#b8a7ff]" /><p className="display text-[19px] font-bold tracking-[-.03em] text-violet-100">Meet. Match. Chog.</p></div>
-        <p className="mt-5 max-w-[470px] text-[16px] leading-7 text-violet-100/75">Your Chog is already one of a kind. Meet the people who get it — for dates, friendships, ideas, and everything in between.</p>
-        <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-          {showWallet ? <Suspense fallback={<button disabled className="button-primary min-h-[54px] rounded-full px-7 text-sm font-bold opacity-70">Preparing wallet…</button>}><WalletAuthPanel autoOpen /></Suspense> : <><button onClick={connect} className="button-primary inline-flex min-h-[54px] items-center gap-3 rounded-full px-7 text-sm font-bold" data-testid="button-connect-wallet">Connect wallet<ArrowDownRight size={17} /></button><span className="text-xs text-violet-100/65">A signature proves ownership. It never moves funds.</span></>}
-        </div>
-        {feedback && <p className="mt-4 max-w-lg rounded-2xl border border-[#edc8bc] bg-[#fff2ec] px-4 py-3 text-sm leading-5 text-[#8b4232]" role="alert" data-testid="status-wallet-error">{feedback}</p>}
-        <div className="mt-10 flex items-center gap-5 border-t border-white/15 pt-6 text-xs font-medium text-violet-100/75"><span className="inline-flex items-center gap-2"><BadgeCheck size={15} className="text-[#c6a7ff]" />Verified holder identity</span><span className="inline-flex items-center gap-2"><Heart size={15} className="text-[#f1a5d4]" />Real people only</span></div>
-      </div>
-      <div className="relative mx-auto flex w-full max-w-[520px] items-center justify-center py-5 md:py-0">
-        <div className="absolute left-[8%] top-[15%] h-28 w-28 rounded-full bg-[#9569ff] opacity-45 blur-[44px]" />
-        <div className="absolute bottom-[10%] right-[3%] h-32 w-32 rounded-full bg-[#dc7bdf] opacity-35 blur-[48px]" />
-        <div className="relative w-full max-w-[430px] rounded-[34px] border border-white/25 bg-white/10 p-3 shadow-[0_30px_90px_rgba(6,2,19,.52)] backdrop-blur-xl">
-          <div className="relative h-[375px] overflow-hidden rounded-[26px] bg-[#dcd4ff] sm:h-[470px]">
-            <ChogArtwork />
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#24133fdd] via-[#24133f76] to-transparent px-6 pb-6 pt-32 text-white">
-              <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.17em] text-[#e3dcff]"><span className="h-1.5 w-1.5 rounded-full bg-[#b9ffa9]" />Made for Chog holders</div>
-              <p className="display text-[34px] font-extrabold leading-none tracking-[-.05em]">Your Chog.<br />Your people.</p>
-              <p className="mt-3 max-w-[280px] text-sm leading-5 text-white/75">Discover real holders. Let the good connections be mutual.</p>
+  return (
+    <AppShell>
+      <div className="home-page">
+        <section className="home-hero mx-auto grid max-w-[1240px] items-center gap-5 pb-14 pt-8 md:min-h-[650px] md:grid-cols-[1fr_.9fr] md:gap-4 md:pb-16 md:pt-4">
+          <div className="relative z-[1] max-w-[620px]">
+            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#d9cafa] bg-white/75 px-3.5 py-2 text-xs font-semibold text-[#503877] shadow-sm backdrop-blur-xl">
+              <span className="grid h-5 w-5 place-items-center rounded-full bg-[#eee8ff] text-[#7047ff]">
+                <ShieldCheck size={12} />
+              </span>
+              A community for verified Chog holders
             </div>
-            <div className="absolute right-4 top-4 rounded-full border border-white/50 bg-white/75 px-3 py-2 text-[10px] font-bold uppercase tracking-[.12em] text-[#4f397d] shadow-sm backdrop-blur">Real holders only</div>
+            <h1
+              className="display text-[53px] font-extrabold leading-[.96] tracking-[-.065em] text-[#24133f] sm:text-[75px] lg:text-[88px]"
+              data-testid="heading-home"
+            >
+              MEET YOUR
+              <br />
+              <span className="relative inline-block text-[#7047ff]">
+                CHOG MATE
+                <span className="absolute -right-7 top-1 text-[#b07bff]">
+                  <Sparkles size={22} />
+                </span>
+              </span>
+              .
+            </h1>
+            <div className="mt-7 flex items-center gap-3">
+              <span className="h-px w-10 bg-[#a78aef]" />
+              <p className="display text-[19px] font-bold tracking-[-.03em] text-[#624490]">
+                Meet. Match. Chog.
+              </p>
+            </div>
+            <p className="mt-5 max-w-[470px] text-[16px] leading-7 text-[#72667a]">
+              Your Chog is already one of a kind. Meet the people who get it —
+              for dates, friendships, ideas, and everything in between.
+            </p>
+            <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+              {showWallet ? (
+                <Suspense
+                  fallback={
+                    <button
+                      disabled
+                      className="button-primary min-h-[54px] rounded-full px-7 text-sm font-bold opacity-70"
+                    >
+                      Preparing wallet…
+                    </button>
+                  }
+                >
+                  <WalletAuthPanel autoOpen />
+                </Suspense>
+              ) : (
+                <>
+                  <button
+                    onClick={connect}
+                    className="button-primary inline-flex min-h-[54px] items-center gap-3 rounded-full px-7 text-sm font-bold"
+                    data-testid="button-connect-wallet"
+                  >
+                    START DISCOVERING
+                    <ArrowDownRight size={17} />
+                  </button>
+                  <span className="text-xs text-[#877b8e]">
+                    A signature proves ownership. It never moves funds.
+                  </span>
+                </>
+              )}
+            </div>
+            {feedback && (
+              <p
+                className="mt-4 max-w-lg rounded-2xl border border-[#edc8bc] bg-[#fff2ec] px-4 py-3 text-sm leading-5 text-[#8b4232]"
+                role="alert"
+                data-testid="status-wallet-error"
+              >
+                {feedback}
+              </p>
+            )}
+            <div className="mt-9 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-[#d9cfc1] pt-6 text-xs font-medium text-[#74677b]">
+              <span className="inline-flex items-center gap-2">
+                <BadgeCheck size={15} className="text-[#7047ff]" />
+                Verified holder identity
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <Heart size={15} className="text-[#cf78a8]" />
+                Real people, real connections
+              </span>
+            </div>
           </div>
-          <div className="flex items-center justify-between px-3 pb-1 pt-4"><span className="text-xs font-semibold text-violet-100/80">A little more you, together.</span><span className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-[#d7c3ff]"><ArrowDownRight size={16} /></span></div>
-        </div>
-        <div className="light-glass-card absolute -left-1 top-[20%] hidden rounded-2xl px-4 py-3 md:block"><Eyebrow>Meet your kind</Eyebrow><p className="display text-lg font-extrabold text-[#24133f]">Same collection.<br />Different stories.</p></div>
+
+          <div className="home-hero-art relative mx-auto flex min-h-[360px] w-full max-w-[530px] items-center justify-center sm:min-h-[455px]">
+            <div className="home-orbit home-orbit-one" aria-hidden="true" />
+            <div className="home-orbit home-orbit-two" aria-hidden="true" />
+            <div className="home-hero-gif-wrap relative z-[1] flex h-[340px] w-full max-w-[420px] items-center justify-center sm:h-[430px]">
+              <img
+                src={chogGif}
+                alt="Chog waving gently"
+                className="home-hero-gif"
+                width="420"
+                height="390"
+                fetchPriority="high"
+              />
+            </div>
+            <div className="home-art-note absolute bottom-4 left-0 z-[2] hidden rounded-2xl border border-white/80 bg-white/75 px-4 py-3 shadow-[0_12px_38px_rgba(64,47,78,.11)] backdrop-blur-xl sm:block">
+              <Eyebrow>Same collection</Eyebrow>
+              <p className="display text-lg font-extrabold text-[#24133f]">
+                Different stories.
+              </p>
+            </div>
+            <div className="absolute right-0 top-[14%] z-[2] inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/75 px-3 py-2 text-[10px] font-bold uppercase tracking-[.12em] text-[#503877] shadow-sm backdrop-blur-xl">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#6eaf70]" />
+              Made for Chog holders
+            </div>
+          </div>
+        </section>
+
+        <section
+          className="home-section mx-auto max-w-[1240px] border-t border-[#ded4c6] py-12 sm:py-16"
+          aria-labelledby="sales-heading"
+        >
+          <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div>
+              <Eyebrow>Chog Genesis marketplace activity</Eyebrow>
+              <h2
+                id="sales-heading"
+                className="display text-[31px] font-extrabold leading-tight text-[#24133f] sm:text-[40px]"
+              >
+                Real live Chog sales.
+              </h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-[#786d80]">
+                Recent sales from OpenSea’s collection feed. No sample listings,
+                no made-up prices.
+              </p>
+            </div>
+            <a
+              href="https://opensea.io/collection/chog-genesis"
+              target="_blank"
+              rel="noreferrer"
+              className="home-text-link inline-flex w-fit items-center gap-2 rounded-full px-1 py-2 text-xs font-bold"
+            >
+              View collection <ArrowRight size={14} />
+            </a>
+          </div>
+
+          {sales.isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading live sales">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={index} className="surface overflow-hidden rounded-[24px]">
+                  <div className="skeleton aspect-[1.28] rounded-none" />
+                  <div className="space-y-3 p-5">
+                    <div className="skeleton h-4 w-2/5 rounded-full" />
+                    <div className="skeleton h-3 w-3/5 rounded-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : sales.isError ? (
+            <LiveDataState
+              title="LIVE SALES UNAVAILABLE"
+              description="The marketplace feed isn’t available right now. We won’t substitute sample sales."
+              testId="state-live-sales-unavailable"
+            />
+          ) : !sales.data || sales.data.sales.length === 0 ? (
+            <LiveDataState
+              title="NO LIVE SALES"
+              description="Live Chog sales will appear here."
+              testId="state-no-live-sales"
+            />
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {sales.data.sales.map((sale) => (
+                  <a
+                    key={`${sale.tokenId}-${sale.timestamp}`}
+                    href={sale.saleUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="home-sale-card surface group overflow-hidden rounded-[24px] transition duration-200 hover:-translate-y-1"
+                    data-testid={`card-live-sale-${sale.tokenId}`}
+                  >
+                    <div className="relative aspect-[1.28] overflow-hidden bg-[#f3ecdf]">
+                      {sale.imageUrl ? (
+                        <img
+                          src={sale.imageUrl}
+                          alt={`Chog #${sale.tokenId}`}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]"
+                        />
+                      ) : (
+                        <div className="grid h-full place-items-center text-[#8e8097]">
+                          <ImageOff size={24} />
+                        </div>
+                      )}
+                      <span className="absolute left-4 top-4 rounded-full border border-white/75 bg-white/85 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[.13em] text-[#5d3987] shadow-sm backdrop-blur">
+                        Recent sale
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 p-5">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[#8a7c91]">
+                          Chog Genesis
+                        </p>
+                        <h3 className="display mt-1 text-xl font-extrabold text-[#24133f]">
+                          Chog #{sale.tokenId}
+                        </h3>
+                        <p className="mt-2 text-xs text-[#81768b]">
+                          {sale.marketplace ?? 'Marketplace not reported'} ·{' '}
+                          {formatTimeAgo(sale.timestamp)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-xl bg-[#f1ebff] px-3 py-2 text-sm font-extrabold text-[#6844bb]">
+                        {formatAmount(sale.price)} {sale.currency}
+                      </span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+              <p className="mt-4 text-right text-[10px] text-[#968a9b]">
+                Feed updated {formatTimeAgo(sales.data.updatedAt)}
+              </p>
+            </>
+          )}
+        </section>
+
+        <section
+          className="home-section mx-auto max-w-[1240px] border-t border-[#ded4c6] py-12 sm:py-16"
+          aria-labelledby="stats-heading"
+        >
+          <div className="mb-7">
+            <Eyebrow>Chog Genesis, at a glance</Eyebrow>
+            <h2
+              id="stats-heading"
+              className="display text-[31px] font-extrabold leading-tight text-[#24133f] sm:text-[40px]"
+            >
+              Collection statistics.
+            </h2>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              label="Floor price"
+              value={
+                stats.data
+                  ? stats.data.floorPrice
+                    ? `${formatAmount(stats.data.floorPrice.amount)} ${stats.data.floorPrice.currency}`
+                    : 'No active listings'
+                  : 'Unavailable'
+              }
+              loading={stats.isLoading}
+              error={stats.isError}
+            />
+            <StatCard
+              label="Top floor"
+              value={
+                stats.data
+                  ? stats.data.topFloor
+                    ? `${formatAmount(stats.data.topFloor.amount)} ${stats.data.topFloor.currency}`
+                    : 'Not reported'
+                  : 'Unavailable'
+              }
+              loading={stats.isLoading}
+              error={stats.isError}
+              detail="Not provided by the current marketplace stats endpoint."
+            />
+            <StatCard
+              label="Total volume"
+              value={
+                stats.data?.totalVolume
+                  ? `${formatAmount(stats.data.totalVolume.amount)} ${stats.data.totalVolume.currency}`
+                  : 'Unavailable'
+              }
+              loading={stats.isLoading}
+              error={stats.isError}
+            />
+            <StatCard
+              label="Total holders"
+              value={
+                stats.data?.totalHolders != null
+                  ? stats.data.totalHolders.toLocaleString()
+                  : 'Unavailable'
+              }
+              loading={stats.isLoading}
+              error={stats.isError}
+            />
+          </div>
+          {stats.data && (
+            <p className="mt-4 text-right text-[10px] text-[#968a9b]">
+              Data updated {formatTimeAgo(stats.data.updatedAt)}
+            </p>
+          )}
+        </section>
+
+        <section
+          className="home-section mx-auto max-w-[1240px] border-t border-[#ded4c6] py-12 sm:py-16"
+          aria-labelledby="how-heading"
+        >
+          <div className="mb-8 max-w-2xl">
+            <Eyebrow>From Chog holder to Chog Mate</Eyebrow>
+            <h2
+              id="how-heading"
+              className="display text-[31px] font-extrabold leading-tight text-[#24133f] sm:text-[40px]"
+            >
+              A good connection starts with something real.
+            </h2>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { n: '01', title: 'Connect', copy: 'Verify your Chog on Monad. Your wallet is your proof.', icon: ShieldCheck },
+              { n: '02', title: 'Create', copy: 'Share the details that help the right people find you.', icon: Sparkles },
+              { n: '03', title: 'Discover', copy: 'Meet real holders looking for the same kind of connection.', icon: UsersRound },
+              { n: '04', title: 'Match', copy: 'A conversation opens when the interest goes both ways.', icon: MessageCircleHeart },
+            ].map(({ n, title, copy, icon: Icon }) => (
+              <article key={n} className="home-step surface rounded-[22px] p-5 sm:p-6">
+                <div className="flex items-center justify-between">
+                  <span className="display text-sm font-extrabold text-[#a08ac0]">{n}</span>
+                  <Icon size={19} className="text-[#7047ff]" />
+                </div>
+                <h3 className="display mt-6 text-xl font-extrabold text-[#24133f]">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-[#786d80]">{copy}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="home-blind mx-auto my-5 max-w-[1240px] overflow-hidden rounded-[30px] border border-[#dacbf3] px-6 py-8 sm:px-10 sm:py-10">
+          <div className="relative z-[1] max-w-2xl">
+            <Eyebrow>A different kind of first impression</Eyebrow>
+            <h2 className="display text-[29px] font-extrabold leading-tight text-[#24133f] sm:text-[36px]">
+              Blind Chog.
+              <span className="mt-1 block text-[#7047ff]">Connection before collection.</span>
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-[#756883]">
+              We’re shaping a way to meet through what you share, before the
+              artwork takes center stage. Blind Chog isn’t available yet.
+            </p>
+          </div>
+          <div className="home-blind-mark" aria-hidden="true">
+            <Heart size={34} strokeWidth={1.3} />
+          </div>
+        </section>
+
+        <section className="home-final-cta mx-auto my-10 max-w-[1240px] rounded-[30px] px-6 py-10 text-center sm:my-14 sm:px-12 sm:py-14">
+          <div className="relative z-[1] mx-auto max-w-2xl">
+            <Eyebrow>For the people behind the Chogs</Eyebrow>
+            <h2 className="display text-[34px] font-extrabold leading-tight text-[#24133f] sm:text-[46px]">
+              Find your Chog Mate.
+            </h2>
+            <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#756883]">
+              Verify your holder identity and meet people who are here for the
+              same reason you are.
+            </p>
+            <button
+              onClick={connect}
+              className="button-primary mt-6 inline-flex min-h-[50px] items-center gap-2 rounded-full px-6 text-sm font-bold"
+              data-testid="button-final-cta"
+            >
+              START DISCOVERING <ArrowRight size={16} />
+            </button>
+          </div>
+        </section>
       </div>
-    </section>
-    <section className="mx-auto grid max-w-[1240px] gap-4 border-t border-white/15 py-8 sm:grid-cols-3">
-      {[['01','Bring your Chog','Your wallet is your proof. No made-up profiles, no guesswork.'],['02','Find your people','Meet verified holders looking for the same kind of connection.'],['03','Make it mutual','A match only happens when the feeling goes both ways.']].map(([n,title,copy])=><div key={n} className="flex gap-4 rounded-2xl px-2 py-3"><span className="display text-sm font-extrabold text-[#c5a4ff]">{n}</span><div><h2 className="display font-extrabold text-white">{title}</h2><p className="mt-1 text-sm leading-5 text-violet-100/70">{copy}</p></div></div>)}
-    </section>
-    <ChogCollectionGallery />
-  </AppShell>;
+    </AppShell>
+  );
+}
+
+function LiveDataState({
+  title,
+  description,
+  testId,
+}: {
+  title: string;
+  description: string;
+  testId: string;
+}) {
+  return (
+    <div
+      className="home-data-state surface flex min-h-44 flex-col items-center justify-center rounded-[24px] px-6 py-9 text-center"
+      role="status"
+      data-testid={testId}
+    >
+      <span className="mb-3 grid h-10 w-10 place-items-center rounded-2xl bg-[#f1ebff] text-[#7047ff]">
+        <Sparkles size={18} />
+      </span>
+      <h3 className="display text-lg font-extrabold text-[#24133f]">{title}</h3>
+      <p className="mt-2 max-w-md text-sm leading-6 text-[#81758a]">{description}</p>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  loading,
+  error,
+  detail,
+}: {
+  label: string;
+  value: string;
+  loading: boolean;
+  error: boolean;
+  detail?: string;
+}) {
+  return (
+    <article className="home-stat surface rounded-[21px] p-5" data-testid={`stat-${label.toLowerCase().replaceAll(' ', '-')}`}>
+      <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[#806b99]">{label}</p>
+      {loading ? (
+        <div className="skeleton mt-4 h-7 w-3/4 rounded-full" />
+      ) : (
+        <p className={`display mt-3 break-words text-[21px] font-extrabold leading-tight ${error ? 'text-[#987c9c]' : 'text-[#24133f]'}`}>
+          {value}
+        </p>
+      )}
+      {error && <p className="mt-2 text-[10px] text-[#9a7180]">Live data unavailable</p>}
+      {detail && !loading && <p className="mt-2 text-[10px] leading-4 text-[#95899b]">{detail}</p>}
+    </article>
+  );
+}
+
+function formatAmount(amount: string) {
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return amount;
+  if (value !== 0 && Math.abs(value) < 0.0001) return value.toExponential(2);
+  return new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 4,
+  }).format(value);
+}
+
+function formatTimeAgo(value: string) {
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return 'time unavailable';
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
 }

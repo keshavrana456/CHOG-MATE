@@ -71,10 +71,53 @@ export interface NftOwnership {
   chogs: Chog[];
 }
 
+export interface PriceMetric {
+  amount: string;
+  currency: string;
+}
+
+export interface LiveSale {
+  tokenId: string;
+  imageUrl: string;
+  price: string;
+  currency: string;
+  /** @nullable */
+  marketplace: string | null;
+  saleUrl: string;
+  timestamp: string;
+}
+
+export interface LiveSales {
+  sales: LiveSale[];
+  updatedAt: string;
+}
+
+export interface CollectionStats {
+  floorPrice: PriceMetric | null;
+  topFloor: PriceMetric | null;
+  totalVolume: PriceMetric | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  totalHolders: number | null;
+  updatedAt: string;
+}
+
 export interface Profile {
   userId: string;
   username: string;
   displayName: string;
+  /** @nullable */
+  name: string | null;
+  /** @nullable */
+  gender: string | null;
+  /**
+     * @minimum 18
+     * @maximum 120
+     * @nullable
+     */
+  age: number | null;
   walletAddress: string;
   /** @nullable */
   bio?: string | null;
@@ -118,6 +161,22 @@ export interface ProfileInput {
      * @maxLength 48
      */
   displayName: string;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  name?: string | null;
+  /**
+     * @maxLength 50
+     * @nullable
+     */
+  gender?: string | null;
+  /**
+     * @minimum 18
+     * @maximum 120
+     * @nullable
+     */
+  age?: number | null;
   /**
      * @maxLength 500
      * @nullable

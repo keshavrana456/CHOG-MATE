@@ -7,6 +7,9 @@ export interface DbProfile {
   user_id: string;
   username: string;
   display_name: string;
+  name: string | null;
+  gender: string | null;
+  age: number | null;
   bio: string | null;
   location: string | null;
   timezone: string | null;
@@ -239,11 +242,15 @@ export function profileToApi(
   bundle: ProfileBundle,
   compatibility: number | null = null,
   whyYouMatch: string[] = [],
+  includeAge = false,
 ) {
   return {
     userId: bundle.user.id,
     username: bundle.profile.username,
     displayName: bundle.profile.display_name,
+    name: bundle.profile.name,
+    gender: bundle.profile.gender,
+    age: includeAge ? bundle.profile.age : null,
     walletAddress: bundle.user.wallet_address,
     bio: bundle.profile.bio,
     location: bundle.profile.location,

@@ -1,6 +1,10 @@
+import { formatUnits } from "viem";
+
 const OPENSEA_API_URL = "https://api.opensea.io/api/v2";
 const OPENSEA_COLLECTION_SLUG = "chog-genesis";
 const CHOG_CONTRACT_ADDRESS = "0xc96d31f8626c6d03fae5dcd3d61e3fb9f4a73763";
+const CHOG_OPENSEA_URL = `https://opensea.io/assets/monad/${CHOG_CONTRACT_ADDRESS}`;
+const MARKETPLACE_CACHE_MS = 60_000;
 
 export interface ChogCollectionItem {
   tokenId: string;
@@ -13,6 +17,37 @@ export interface ChogCollectionPage {
   items: ChogCollectionItem[];
   next: string | null;
 }
+
+export interface LiveSale {
+  tokenId: string;
+  imageUrl: string;
+  price: string;
+  currency: string;
+  marketplace: string | null;
+  saleUrl: string;
+  timestamp: string;
+}
+
+export interface PriceMetric {
+  amount: string;
+  currency: string;
+}
+
+export interface CollectionStats {
+  floorPrice: PriceMetric | null;
+  topFloor: PriceMetric | null;
+  totalVolume: PriceMetric | null;
+  totalHolders: number | null;
+  updatedAt: string;
+}
+
+interface TimedValue<T> {
+  expiresAt: number;
+  value: T;
+}
+
+let liveSalesCache: TimedValue<LiveSale[]> | null = null;
+let collectionStatsCache: TimedValue<CollectionStats> | null = null;
 
 export class NftIndexerError extends Error {
   constructor(
@@ -28,43 +63,13 @@ export async function getChogCollectionPage(
   limit: number,
   cursor?: string,
 ): Promise<ChogCollectionPage> {
-  const apiKey = process.env.OPENSEA_API_KEY?.trim();
-  if (!apiKey) {
-    throw new NftIndexerError("NFT collection indexer is not configured.", 503);
-  }
-
   const url = new URL(
     `${OPENSEA_API_URL}/collection/${OPENSEA_COLLECTION_SLUG}/nfts`,
   );
   url.searchParams.set("limit", String(limit));
   if (cursor) url.searchParams.set("next", cursor);
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      headers: {
-        accept: "application/json",
-        "x-api-key": apiKey,
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
-  } catch {
-    throw new NftIndexerError("NFT collection indexer could not be reached.", 502);
-  }
-
-  if (!response.ok) {
-    throw new NftIndexerError(
-      "NFT collection indexer returned an unsuccessful response.",
-      response.status === 401 || response.status === 403 ? 503 : 502,
-    );
-  }
-
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new NftIndexerError("NFT collection indexer returned invalid data.", 502);
-  }
+  const payload = await requestOpenSea(url);
 
   if (!payload || typeof payload !== "object") {
     throw new NftIndexerError("NFT collection indexer returned invalid data.", 502);
@@ -112,6 +117,211 @@ export async function getChogCollectionPage(
       ? result.next
       : null,
   };
+}
+
+export async function getLiveSales(): Promise<LiveSale[]> {
+  if (liveSalesCache && liveSalesCache.expiresAt > Date.now()) {
+    return liveSalesCache.value;
+  }
+
+  const url = new URL(`${OPENSEA_API_URL}/events/collection/${OPENSEA_COLLECTION_SLUG}`);
+  url.searchParams.set("event_type", "sale");
+  url.searchParams.set("limit", "20");
+  url.searchParams.set("after", String(Math.floor(Date.now() / 1000) - 48 * 60 * 60));
+  const payload = await requestOpenSea(url);
+  if (!payload || typeof payload !== "object") {
+    throw new NftIndexerError("Marketplace returned invalid sale data.", 502);
+  }
+
+  const events = (payload as { asset_events?: unknown }).asset_events;
+  if (!Array.isArray(events)) {
+    throw new NftIndexerError("Marketplace returned invalid sale data.", 502);
+  }
+
+  const sales = events
+    .flatMap((entry): LiveSale[] => {
+      if (!entry || typeof entry !== "object") return [];
+      const event = entry as Record<string, unknown>;
+      const nft = event.nft && typeof event.nft === "object"
+        ? event.nft as Record<string, unknown>
+        : event.asset && typeof event.asset === "object"
+          ? event.asset as Record<string, unknown>
+          : null;
+      if (!nft) return [];
+      const payment = event.payment && typeof event.payment === "object"
+        ? event.payment as Record<string, unknown>
+        : null;
+      const tokenId = nft?.identifier;
+      const contract = nft?.contract;
+      const timestamp = typeof event.event_timestamp === "number"
+        ? event.event_timestamp
+        : Number(event.event_timestamp);
+      const quantity = payment?.quantity;
+      const decimals = payment?.decimals;
+      const currency = payment?.symbol;
+
+      if (
+        event.event_type !== "sale" ||
+        typeof tokenId !== "string" ||
+        !/^\d{1,78}$/.test(tokenId) ||
+        typeof contract !== "string" ||
+        contract.toLowerCase() !== CHOG_CONTRACT_ADDRESS ||
+        !Number.isSafeInteger(timestamp) ||
+        timestamp <= 0 ||
+        (typeof quantity !== "string" && typeof quantity !== "number") ||
+        typeof decimals !== "number" ||
+        !Number.isInteger(decimals) ||
+        decimals < 0 ||
+        decimals > 36 ||
+        typeof currency !== "string" ||
+        !currency.trim()
+      ) {
+        return [];
+      }
+
+      const rawImage = [nft.display_image_url, nft.image_url, nft.original_image_url]
+        .find((value) => isHttpsUrl(value));
+      if (typeof rawImage !== "string") return [];
+
+      const rawSaleUrl = isHttpsUrl(nft.opensea_url)
+        ? nft.opensea_url
+        : `${CHOG_OPENSEA_URL}/${encodeURIComponent(tokenId)}`;
+      const marketplace =
+        typeof event.marketplace === "string" && event.marketplace.trim()
+          ? event.marketplace.trim()
+          : null;
+      let amount: string;
+      try {
+        amount = formatUnits(BigInt(quantity), decimals);
+      } catch {
+        return [];
+      }
+      if (BigInt(quantity) <= 0n) return [];
+
+      return [{
+        tokenId,
+        imageUrl: rawImage,
+        price: amount,
+        currency: currency.trim(),
+        marketplace,
+        saleUrl: rawSaleUrl,
+        timestamp: new Date(timestamp * 1000).toISOString(),
+      }];
+    })
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 6);
+
+  liveSalesCache = { value: sales, expiresAt: Date.now() + MARKETPLACE_CACHE_MS };
+  return sales;
+}
+
+export async function getCollectionStats(): Promise<CollectionStats> {
+  if (collectionStatsCache && collectionStatsCache.expiresAt > Date.now()) {
+    return collectionStatsCache.value;
+  }
+
+  const url = new URL(`${OPENSEA_API_URL}/collections/${OPENSEA_COLLECTION_SLUG}/stats`);
+  const payload = await requestOpenSea(url);
+  if (!payload || typeof payload !== "object") {
+    throw new NftIndexerError("Marketplace returned invalid collection statistics.", 502);
+  }
+
+  const total = (payload as { total?: unknown }).total;
+  if (!total || typeof total !== "object") {
+    throw new NftIndexerError("Marketplace returned invalid collection statistics.", 502);
+  }
+
+  const metrics = total as Record<string, unknown>;
+  const floorPrice = metricFromProvider(
+    metrics.floor_price,
+    metrics.floor_price_symbol,
+    true,
+  );
+  const totalVolume = metricFromProvider(
+    metrics.volume,
+    metrics.volume_symbol,
+    false,
+  );
+  const totalHolders =
+    typeof metrics.num_owners === "number" &&
+    Number.isSafeInteger(metrics.num_owners) &&
+    metrics.num_owners >= 0
+      ? metrics.num_owners
+      : null;
+
+  const value: CollectionStats = {
+    floorPrice,
+    // OpenSea's stats endpoint does not define or return a "top floor" metric.
+    // Leave it unavailable rather than assigning a made-up interpretation.
+    topFloor: null,
+    totalVolume,
+    totalHolders,
+    updatedAt: new Date().toISOString(),
+  };
+  collectionStatsCache = { value, expiresAt: Date.now() + MARKETPLACE_CACHE_MS };
+  return value;
+}
+
+async function requestOpenSea(url: URL): Promise<unknown> {
+  const apiKey = process.env.OPENSEA_API_KEY?.trim();
+  if (!apiKey) {
+    throw new NftIndexerError("OpenSea marketplace data is not configured.", 503);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        "x-api-key": apiKey,
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw new NftIndexerError("OpenSea could not be reached.", 502);
+  }
+
+  if (!response.ok) {
+    throw new NftIndexerError(
+      response.status === 401 || response.status === 403
+        ? "OpenSea API credentials are not valid."
+        : "OpenSea returned an unsuccessful response.",
+      response.status === 401 || response.status === 403 ? 503 : 502,
+    );
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    throw new NftIndexerError("OpenSea returned invalid data.", 502);
+  }
+}
+
+function metricFromProvider(
+  amount: unknown,
+  currency: unknown,
+  zeroMeansMissing: boolean,
+): PriceMetric | null {
+  if (
+    typeof amount !== "number" ||
+    !Number.isFinite(amount) ||
+    amount < 0 ||
+    (zeroMeansMissing && amount === 0) ||
+    typeof currency !== "string" ||
+    currency.trim().length === 0
+  ) {
+    return null;
+  }
+  return { amount: String(amount), currency: currency.trim() };
+}
+
+function isHttpsUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function imageGatewayUrls(value: unknown): string[] {

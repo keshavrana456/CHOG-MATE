@@ -19,6 +19,22 @@ export interface ProfileInput {
      */
   displayName: string;
   /**
+     * @maxLength 80
+     * @nullable
+     */
+  name?: string | null;
+  /**
+     * @maxLength 50
+     * @nullable
+     */
+  gender?: string | null;
+  /**
+     * @minimum 18
+     * @maximum 120
+     * @nullable
+     */
+  age?: number | null;
+  /**
      * @maxLength 500
      * @nullable
      */

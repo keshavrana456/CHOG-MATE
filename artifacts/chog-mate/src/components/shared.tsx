@@ -11,10 +11,12 @@ export function Brand({ inverse = false }: { inverse?: boolean }) {
 }
 
 const links = [
+  { href: '/', label: 'Home', icon: Sparkles },
   { href: '/discover', label: 'Discover', icon: Sparkles },
   { href: '/matches', label: 'Matches', icon: Heart },
   { href: '/messages', label: 'Messages', icon: ArrowRight },
   { href: '/my-chog', label: 'My Chog', icon: BadgeCheck },
+  { href: '/profile', label: 'My Profile', icon: UserRound },
 ];
 
 export function AppShell({ children, displayName }: { children: ReactNode; displayName?: string }) {
@@ -22,19 +24,18 @@ export function AppShell({ children, displayName }: { children: ReactNode; displ
   return <div className="app-shell grain relative">
     <header className="topbar relative z-20 sticky top-0">
       <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-5 md:px-9">
-        <Brand inverse />
-        <nav className="nav-glass hidden items-center gap-1 rounded-full p-1 md:flex" aria-label="Main navigation">
-          {links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} data-testid={`link-nav-${label.toLowerCase().replace(' ', '-')}`} className={`nav-link flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold ${path === href ? 'active' : ''}`}><Icon size={15} strokeWidth={2.2} />{label}</Link>)}
+        <Brand />
+        <nav className="nav-glass hidden items-center gap-0.5 rounded-full p-1 md:flex" aria-label="Main navigation">
+          {links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} data-testid={`link-nav-${label.toLowerCase().replace(' ', '-')}`} className={`nav-link flex items-center gap-1.5 rounded-full px-2 py-2 text-[11px] font-semibold lg:gap-2 lg:px-2.5 lg:text-xs xl:px-3 xl:text-[13px] ${path === href ? 'active' : ''}`}><Icon size={14} strokeWidth={2.2} />{label}</Link>)}
         </nav>
         <div className="flex items-center gap-2">
-          <Link href="/profile" className="header-profile-link hidden rounded-full px-4 py-2 text-[13px] font-semibold transition sm:block" data-testid="link-edit-profile">{displayName ? `Hi, ${displayName}` : 'Your profile'}</Link>
-          <Link href="/settings" className="glass-icon-button grid h-10 w-10 place-items-center rounded-full transition" aria-label="Settings" data-testid="link-settings"><Settings size={16}/></Link>
+          <Link href="/settings" className="glass-icon-button grid h-10 w-10 place-items-center rounded-full transition" aria-label="Settings" aria-current={path === '/settings' ? 'page' : undefined} data-testid="link-settings"><Settings size={16}/></Link>
         </div>
       </div>
     </header>
     <main className="relative z-[1] mx-auto w-full max-w-[1440px] px-5 pb-28 pt-7 md:px-9 md:pb-12 md:pt-10">{children}</main>
-    <nav className="mobile-tabbar fixed bottom-0 left-0 right-0 z-30 grid grid-cols-7 px-1 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 md:hidden" aria-label="Mobile navigation">
-      {[{ href: '/', label: 'Home', icon: Sparkles }, ...links, {href:'/profile',label:'Profile',icon:UserRound},{href:'/settings',label:'Settings',icon:Settings}].map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} className={`mobile-tab flex flex-col items-center gap-1 rounded-xl py-1.5 text-[9px] font-semibold ${path === href ? 'active' : ''}`} data-testid={`mobile-nav-${label.toLowerCase().replace(' ', '-')}`}><Icon size={18} strokeWidth={2} />{label}</Link>)}
+    <nav className="mobile-tabbar fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 md:hidden" aria-label="Mobile navigation">
+      {[{ href: '/', label: 'Home', icon: Sparkles }, {href:'/discover',label:'Discover',icon:Sparkles}, {href:'/matches',label:'Matches',icon:Heart}, {href:'/messages',label:'Messages',icon:ArrowRight}, {href:'/profile',label:'Profile',icon:UserRound}].map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} className={`mobile-tab flex flex-col items-center gap-1 rounded-xl py-1.5 text-[9px] font-semibold ${path === href ? 'active' : ''}`} data-testid={`mobile-nav-${label.toLowerCase().replace(' ', '-')}`}><Icon size={18} strokeWidth={2} />{label}</Link>)}
     </nav>
   </div>;
 }
@@ -44,7 +45,7 @@ export function Eyebrow({ children }: { children: ReactNode }) {
 }
 
 export function PageTitle({ eyebrow, title, description, action }: { eyebrow: string; title: string; description?: string; action?: ReactNode }) {
-  return <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><Eyebrow>{eyebrow}</Eyebrow><h1 className="display text-[38px] font-extrabold leading-[1.04] text-white sm:text-[48px]" data-testid="heading-page">{title}</h1>{description && <p className="mt-3 max-w-xl text-[15px] leading-6 text-violet-100/75">{description}</p>}</div>{action}</div>;
+  return <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><Eyebrow>{eyebrow}</Eyebrow><h1 className="display text-[38px] font-extrabold leading-[1.04] text-[#24133f] sm:text-[48px]" data-testid="heading-page">{title}</h1>{description && <p className="mt-3 max-w-xl text-[15px] leading-6 text-[#74697b]">{description}</p>}</div>{action}</div>;
 }
 
 export function EmptyState({ mark = 'cm', title, detail, action }: { mark?: string; title: string; detail: string; action?: ReactNode }) {

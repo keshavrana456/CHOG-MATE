@@ -12,11 +12,40 @@ import {
   getOwnedChogs,
 } from "../lib/chogs";
 import {
+  getCollectionStats,
   getChogCollectionPage,
+  getLiveSales,
   NftIndexerError,
 } from "../lib/opensea";
 
 const router: IRouter = Router();
+
+router.get("/nft/live-sales", async (req, res): Promise<void> => {
+  try {
+    const sales = await getLiveSales();
+    res.json({ sales, updatedAt: new Date().toISOString() });
+  } catch (error) {
+    const statusCode =
+      error instanceof NftIndexerError ? error.statusCode : 503;
+    req.log.warn({ statusCode }, "Chog Genesis live sales unavailable");
+    res.status(statusCode).json({
+      error: "Live Chog sales are temporarily unavailable.",
+    });
+  }
+});
+
+router.get("/nft/collection-stats", async (req, res): Promise<void> => {
+  try {
+    res.json(await getCollectionStats());
+  } catch (error) {
+    const statusCode =
+      error instanceof NftIndexerError ? error.statusCode : 503;
+    req.log.warn({ statusCode }, "Chog Genesis collection stats unavailable");
+    res.status(statusCode).json({
+      error: "Chog Genesis collection statistics are temporarily unavailable.",
+    });
+  }
+});
 
 router.get("/nft/collection", async (req, res): Promise<void> => {
   const limit = Number(req.query.limit ?? 50);

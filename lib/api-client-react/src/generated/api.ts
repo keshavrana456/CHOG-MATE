@@ -23,10 +23,12 @@ import type {
   AuthChallenge,
   BlockInput,
   Chog,
+  CollectionStats,
   CurrentProfile,
   DiscoverProfilesParams,
   DiscoveryPage,
   HealthStatus,
+  LiveSales,
   Match,
   Message,
   MessageInput,
@@ -461,6 +463,160 @@ export function useGetNftOwnership<TData = Awaited<ReturnType<typeof getNftOwner
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetNftOwnershipQueryOptions(walletAddress,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetLiveSalesUrl = () => {
+
+
+
+
+  return `/api/nft/live-sales`
+}
+
+/**
+ * @summary Get recent real Chog Genesis sales
+ */
+export const getLiveSales = async ( options?: Parameters<typeof customFetch>[1]): Promise<LiveSales> => {
+
+  return customFetch<LiveSales>(getGetLiveSalesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLiveSalesQueryKey = () => {
+    return [
+    `/api/nft/live-sales`
+    ] as const;
+    }
+
+
+export const getGetLiveSalesQueryOptions = <TData = Awaited<ReturnType<typeof getLiveSales>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLiveSales>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLiveSalesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLiveSales>>> = ({ signal }) => getLiveSales({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLiveSales>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLiveSalesQueryResult = NonNullable<Awaited<ReturnType<typeof getLiveSales>>>
+export type GetLiveSalesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get recent real Chog Genesis sales
+ */
+
+export function useGetLiveSales<TData = Awaited<ReturnType<typeof getLiveSales>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLiveSales>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLiveSalesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCollectionStatsUrl = () => {
+
+
+
+
+  return `/api/nft/collection-stats`
+}
+
+/**
+ * @summary Get verified Chog Genesis collection statistics
+ */
+export const getCollectionStats = async ( options?: Parameters<typeof customFetch>[1]): Promise<CollectionStats> => {
+
+  return customFetch<CollectionStats>(getGetCollectionStatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCollectionStatsQueryKey = () => {
+    return [
+    `/api/nft/collection-stats`
+    ] as const;
+    }
+
+
+export const getGetCollectionStatsQueryOptions = <TData = Awaited<ReturnType<typeof getCollectionStats>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCollectionStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCollectionStatsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCollectionStats>>> = ({ signal }) => getCollectionStats({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCollectionStats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCollectionStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getCollectionStats>>>
+export type GetCollectionStatsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get verified Chog Genesis collection statistics
+ */
+
+export function useGetCollectionStats<TData = Awaited<ReturnType<typeof getCollectionStats>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCollectionStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCollectionStatsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
