@@ -5,7 +5,14 @@ import type { Chog, Profile } from '@workspace/api-client-react';
 
 export function Brand({ inverse = false }: { inverse?: boolean }) {
   return <Link href="/" className="inline-flex items-center gap-3" data-testid="link-brand">
-    <span className="brand-mark">cm</span>
+    <img
+      src={`${import.meta.env.BASE_URL}chog-idle.gif`}
+      alt=""
+      aria-hidden="true"
+      width={40}
+      height={40}
+      className="brand-mark"
+    />
     <span className={`display text-[19px] font-extrabold tracking-[-.07em] ${inverse ? 'text-[#fff4de]' : 'text-[#24133f]'}`}>CHOG MATE</span>
   </Link>;
 }
