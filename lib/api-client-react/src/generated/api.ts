@@ -31,6 +31,8 @@ import type {
   LiveSales,
   Match,
   Message,
+  MessageAttachmentUpload,
+  MessageAttachmentUploadInput,
   MessageInput,
   NftOwnership,
   Profile,
@@ -1284,6 +1286,95 @@ export const useSendMessage = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSendMessageMutationOptions(options));
+    }
+
+export const getRequestMessageAttachmentUploadUrlUrl = (matchId: string,) => {
+
+
+
+
+  return `/api/matches/${matchId}/attachments/upload-url`
+}
+
+/**
+ * @summary Request a one-time upload token for a private chat attachment
+ */
+export const requestMessageAttachmentUploadUrl = async (matchId: string,
+    messageAttachmentUploadInput: MessageAttachmentUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<MessageAttachmentUpload> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<MessageAttachmentUpload>(getRequestMessageAttachmentUploadUrlUrl(matchId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(messageAttachmentUploadInput)
+  }
+);}
+
+
+
+
+
+export const getRequestMessageAttachmentUploadUrlMutationKey = () => ['requestMessageAttachmentUploadUrl'] as const;
+
+export const getRequestMessageAttachmentUploadUrlMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestMessageAttachmentUploadUrl>>, TError,RequestMessageAttachmentUploadUrlMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestMessageAttachmentUploadUrl>>, TError,RequestMessageAttachmentUploadUrlMutationVariables, TContext> => {
+
+const mutationKey = getRequestMessageAttachmentUploadUrlMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestMessageAttachmentUploadUrl>>, RequestMessageAttachmentUploadUrlMutationVariables> = (props) => {
+          const {matchId,data} = props ?? {};
+
+          return  requestMessageAttachmentUploadUrl(matchId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestMessageAttachmentUploadUrlMutationResult = NonNullable<Awaited<ReturnType<typeof requestMessageAttachmentUploadUrl>>>
+    export type RequestMessageAttachmentUploadUrlMutationBody = BodyType<MessageAttachmentUploadInput>
+    export type RequestMessageAttachmentUploadUrlMutationError = ErrorType<unknown>
+    export type RequestMessageAttachmentUploadUrlMutationVariables = {matchId: string;data: BodyType<MessageAttachmentUploadInput>}
+
+    /**
+ * @summary Request a one-time upload token for a private chat attachment
+ */
+export const useRequestMessageAttachmentUploadUrl = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestMessageAttachmentUploadUrl>>, TError,RequestMessageAttachmentUploadUrlMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestMessageAttachmentUploadUrl>>,
+        TError,
+        RequestMessageAttachmentUploadUrlMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRequestMessageAttachmentUploadUrlMutationOptions(options));
     }
 
 export const getBlockProfileUrl = () => {

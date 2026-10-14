@@ -1,9 +1,13 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { randomUUID } from "node:crypto";
 import {
   BlockProfileBody,
   GetMatchesResponse,
   GetMessagesParams,
   GetMessagesResponse,
+  RequestMessageAttachmentUploadUrlBody,
+  RequestMessageAttachmentUploadUrlParams,
+  RequestMessageAttachmentUploadUrlResponse,
   ReportProfileBody,
   SendMessageBody,
   SendMessageParams,
@@ -25,6 +29,30 @@ import { getSupabaseAdmin } from "../lib/supabase";
 import { requireWalletSession, type WalletSession } from "../lib/wallet-auth";
 
 const router: IRouter = Router();
+const CHAT_MEDIA_BUCKET = "chog-mate-chat";
+const MAX_CHAT_MEDIA_BYTES = 15 * 1024 * 1024;
+const ALLOWED_CHAT_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/mp3",
+  "video/webm",
+  "application/pdf",
+  "text/plain",
+  "application/zip",
+  "application/json",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
 
 interface MatchRow {
   id: string;
@@ -256,18 +284,59 @@ router.get("/matches/:matchId/messages", async (req, res): Promise<void> => {
       .order("created_at", { ascending: true })
       .limit(200);
     if (error) throw new SocialDataError("CHOG MATE messages are not ready yet.");
-    res.json(
-      GetMessagesResponse.parse(
-        (data ?? []).map((message: Record<string, unknown>) => ({
-          id: message.id,
-          matchId: message.match_id,
-          senderId: message.sender_id,
-          content: message.content,
-          createdAt: message.created_at,
-          readAt: message.read_at,
-        })),
-      ),
-    );
+    const rows = (data ?? []) as Record<string, unknown>[];
+    const signedUrls = await signMessageAttachments(admin, rows);
+    res.json(GetMessagesResponse.parse(rows.map((message) =>
+      messageToApi(message, signedUrls.get(String(message.attachment_path)) ?? null),
+    )));
+  } catch (error) {
+    sendSocialError(req, res, error);
+  }
+});
+
+router.post("/matches/:matchId/attachments/upload-url", async (req, res): Promise<void> => {
+  const session = requireWalletSession(req, res);
+  if (!session) return;
+  const params = RequestMessageAttachmentUploadUrlParams.safeParse(req.params);
+  const body = RequestMessageAttachmentUploadUrlBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Choose a supported file up to 15 MB." });
+    return;
+  }
+
+  try {
+    await requireEligibleProfile(session);
+    const match = await getActiveMatch(params.data.matchId, session.userId);
+    if (!match) {
+      res.status(404).json({ error: "That conversation is no longer active." });
+      return;
+    }
+
+    const { fileName, contentType, size, messageType } = body.data;
+    if (
+      size > MAX_CHAT_MEDIA_BYTES ||
+      !isAllowedChatAttachment(messageType, contentType)
+    ) {
+      res.status(400).json({ error: "This file type is not supported or it exceeds 15 MB." });
+      return;
+    }
+
+    const extension = fileName.toLowerCase().match(/\.[a-z0-9]{1,8}$/)?.[0] ?? "";
+    const objectPath = `${match.id}/${session.userId}/${randomUUID()}${extension}`;
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin.storage
+      .from(CHAT_MEDIA_BUCKET)
+      .createSignedUploadUrl(objectPath);
+    if (error || !data) {
+      req.log.warn({ errorType: error?.name ?? "UnknownError" }, "Could not create chat upload token");
+      throw new SocialDataError("Private chat uploads are not ready. Apply the included Supabase migration.");
+    }
+
+    res.json(RequestMessageAttachmentUploadUrlResponse.parse({
+      bucket: CHAT_MEDIA_BUCKET,
+      objectPath,
+      uploadToken: data.token,
+    }));
   } catch (error) {
     sendSocialError(req, res, error);
   }
@@ -279,7 +348,7 @@ router.post("/matches/:matchId/messages", async (req, res): Promise<void> => {
   const params = SendMessageParams.safeParse(req.params);
   const body = SendMessageBody.safeParse(req.body);
   if (!params.success || !body.success) {
-    res.status(400).json({ error: "Write a message of 1–4,000 characters." });
+    res.status(400).json({ error: "That message is incomplete." });
     return;
   }
 
@@ -291,17 +360,83 @@ router.post("/matches/:matchId/messages", async (req, res): Promise<void> => {
       return;
     }
     const admin = getSupabaseAdmin();
-    const content = body.data.content.trim();
-    if (!content) {
-      res.status(400).json({ error: "Messages can't be empty." });
+    const messageType = body.data.messageType ?? "text";
+    const content = body.data.content?.trim() ?? "";
+    const isTextMessage = messageType === "text";
+    if (isTextMessage && (!content || content.length > 4000)) {
+      res.status(400).json({ error: "Write a message of 1–4,000 characters." });
       return;
     }
+
+    let attachmentPath: string | null = null;
+    let attachmentName: string | null = null;
+    let attachmentContentType: string | null = null;
+    let attachmentSize: number | null = null;
+    let attachmentUrl: string | null = null;
+
+    if (!isTextMessage) {
+      const attachment = body.data;
+      if (
+        !attachment.attachmentPath ||
+        !attachment.attachmentName ||
+        !attachment.attachmentContentType ||
+        !attachment.attachmentSize ||
+        attachment.attachmentSize > MAX_CHAT_MEDIA_BYTES ||
+        !isAllowedChatAttachment(
+          messageType,
+          attachment.attachmentContentType,
+        )
+      ) {
+        res.status(400).json({ error: "The attachment details are invalid." });
+        return;
+      }
+
+      const expectedFolder = `${match.id}/${session.userId}/`;
+      if (
+        !attachment.attachmentPath.startsWith(expectedFolder) ||
+        attachment.attachmentPath.includes("..") ||
+        attachment.attachmentPath.includes("\\")
+      ) {
+        res.status(403).json({ error: "That attachment does not belong to this conversation." });
+        return;
+      }
+
+      const { data: signed, error: signError } = await admin.storage
+        .from(CHAT_MEDIA_BUCKET)
+        .createSignedUrls([attachment.attachmentPath], 600, {
+          download: messageType === "file" ? attachment.attachmentName : false,
+        });
+      const uploadedObject = signed?.[0];
+      if (signError || uploadedObject?.error || !uploadedObject?.signedUrl) {
+        res.status(400).json({ error: "Upload the attachment before sending it." });
+        return;
+      }
+
+      attachmentPath = attachment.attachmentPath;
+      attachmentName = attachment.attachmentName;
+      attachmentContentType = attachment.attachmentContentType;
+      attachmentSize = attachment.attachmentSize;
+      attachmentUrl = uploadedObject.signedUrl;
+    }
+
+    const storedContent = isTextMessage
+      ? content
+      : messageType === "voice"
+        ? "Voice message"
+        : messageType === "image"
+          ? "Image"
+          : attachmentName ?? "File";
     const { data: message, error } = await admin
       .from("messages")
       .insert({
         match_id: match.id,
         sender_id: session.userId,
-        content,
+        content: storedContent,
+        message_type: messageType,
+        attachment_path: attachmentPath,
+        attachment_name: attachmentName,
+        attachment_content_type: attachmentContentType,
+        attachment_size: attachmentSize,
       })
       .select("*")
       .single();
@@ -322,16 +457,7 @@ router.post("/matches/:matchId/messages", async (req, res): Promise<void> => {
       req.log.warn({ code: activityError?.code ?? notificationError?.code }, "Message side effects did not complete");
     }
 
-    res.status(201).json(
-      SendMessageResponse.parse({
-        id: message.id,
-        matchId: message.match_id,
-        senderId: message.sender_id,
-        content: message.content,
-        createdAt: message.created_at,
-        readAt: message.read_at,
-      }),
-    );
+    res.status(201).json(SendMessageResponse.parse(messageToApi(message, attachmentUrl)));
   } catch (error) {
     sendSocialError(req, res, error);
   }
@@ -475,6 +601,71 @@ function sendSocialError(req: Request, res: Response, error: unknown): void {
     "Social service failed",
   );
   res.status(503).json({ error: "This action is temporarily unavailable. Please try again." });
+}
+
+function isAllowedChatAttachment(
+  messageType: string,
+  contentType: string,
+): boolean {
+  const normalized = contentType.toLowerCase().split(";")[0]?.trim() ?? "";
+  if (!ALLOWED_CHAT_MIME_TYPES.has(normalized)) return false;
+  if (messageType === "image") return normalized.startsWith("image/");
+  if (messageType === "voice") {
+    return normalized.startsWith("audio/") || normalized === "video/webm";
+  }
+  return messageType === "file";
+}
+
+async function signMessageAttachments(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  messages: Record<string, unknown>[],
+): Promise<Map<string, string>> {
+  const urls = new Map<string, string>();
+  const media = messages.filter((message) =>
+    typeof message.attachment_path === "string" &&
+    typeof message.match_id === "string" &&
+    typeof message.sender_id === "string" &&
+    message.attachment_path.startsWith(`${message.match_id}/${message.sender_id}/`),
+  );
+
+  for (const shouldDownload of [false, true]) {
+    const group = media.filter((message) =>
+      (message.message_type === "file") === shouldDownload,
+    );
+    const paths = group.map((message) => String(message.attachment_path));
+    if (!paths.length) continue;
+    const { data, error } = await admin.storage
+      .from(CHAT_MEDIA_BUCKET)
+      .createSignedUrls(paths, 600, {
+        download: shouldDownload ? true : false,
+      });
+    if (error) {
+      throw new SocialDataError("Private chat media is not ready yet.");
+    }
+    for (const item of data ?? []) {
+      if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
+    }
+  }
+  return urls;
+}
+
+function messageToApi(
+  message: Record<string, unknown>,
+  attachmentUrl: string | null,
+) {
+  return {
+    id: message.id,
+    matchId: message.match_id,
+    senderId: message.sender_id,
+    content: message.content,
+    createdAt: message.created_at,
+    readAt: message.read_at ?? null,
+    messageType: message.message_type ?? "text",
+    attachmentUrl,
+    attachmentName: message.attachment_name ?? null,
+    attachmentContentType: message.attachment_content_type ?? null,
+    attachmentSize: message.attachment_size ?? null,
+  };
 }
 
 export default router;

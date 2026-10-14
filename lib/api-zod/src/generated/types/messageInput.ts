@@ -5,11 +5,21 @@
  * CHOG MATE wallet, NFT, profile, discovery, and social API
  * OpenAPI spec version: 0.1.0
  */
+import type { MessageInputMessageType } from './messageInputMessageType';
 
 export interface MessageInput {
+  /** @maxLength 4000 */
+  content?: string;
+  messageType?: MessageInputMessageType;
+  /** @maxLength 500 */
+  attachmentPath?: string;
+  /** @maxLength 180 */
+  attachmentName?: string;
+  /** @maxLength 120 */
+  attachmentContentType?: string;
   /**
-     * @minLength 1
-     * @maxLength 4000
+     * @minimum 1
+     * @maximum 15728640
      */
-  content: string;
+  attachmentSize?: number;
 }

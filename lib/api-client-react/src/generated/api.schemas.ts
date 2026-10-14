@@ -253,6 +253,16 @@ export interface SwipeResult {
   match?: Match | null;
 }
 
+export type MessageMessageType = typeof MessageMessageType[keyof typeof MessageMessageType];
+
+
+export const MessageMessageType = {
+  text: 'text',
+  voice: 'voice',
+  image: 'image',
+  file: 'file',
+} as const;
+
 export interface Message {
   id: string;
   matchId: string;
@@ -261,14 +271,79 @@ export interface Message {
   createdAt: string;
   /** @nullable */
   readAt?: string | null;
+  messageType: MessageMessageType;
+  /** @nullable */
+  attachmentUrl: string | null;
+  /** @nullable */
+  attachmentName: string | null;
+  /** @nullable */
+  attachmentContentType: string | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  attachmentSize: number | null;
 }
 
+export type MessageInputMessageType = typeof MessageInputMessageType[keyof typeof MessageInputMessageType];
+
+
+export const MessageInputMessageType = {
+  text: 'text',
+  voice: 'voice',
+  image: 'image',
+  file: 'file',
+} as const;
+
 export interface MessageInput {
+  /** @maxLength 4000 */
+  content?: string;
+  messageType?: MessageInputMessageType;
+  /** @maxLength 500 */
+  attachmentPath?: string;
+  /** @maxLength 180 */
+  attachmentName?: string;
+  /** @maxLength 120 */
+  attachmentContentType?: string;
+  /**
+     * @minimum 1
+     * @maximum 15728640
+     */
+  attachmentSize?: number;
+}
+
+export type MessageAttachmentUploadInputMessageType = typeof MessageAttachmentUploadInputMessageType[keyof typeof MessageAttachmentUploadInputMessageType];
+
+
+export const MessageAttachmentUploadInputMessageType = {
+  voice: 'voice',
+  image: 'image',
+  file: 'file',
+} as const;
+
+export interface MessageAttachmentUploadInput {
   /**
      * @minLength 1
-     * @maxLength 4000
+     * @maxLength 180
      */
-  content: string;
+  fileName: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  contentType: string;
+  /**
+     * @minimum 1
+     * @maximum 15728640
+     */
+  size: number;
+  messageType: MessageAttachmentUploadInputMessageType;
+}
+
+export interface MessageAttachmentUpload {
+  bucket: string;
+  objectPath: string;
+  uploadToken: string;
 }
 
 export interface BlockInput {

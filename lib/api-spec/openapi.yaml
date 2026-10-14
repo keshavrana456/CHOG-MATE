@@ -291,6 +291,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Message"
+  /matches/{matchId}/attachments/upload-url:
+    post:
+      operationId: requestMessageAttachmentUploadUrl
+      tags: [matching]
+      summary: Request a one-time upload token for a private chat attachment
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageAttachmentUploadInput"
+      responses:
+        "200":
+          description: One-time upload token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageAttachmentUpload"
   /blocks:
     post:
       operationId: blockProfile
@@ -539,7 +564,7 @@ components:
         unreadCount: { type: integer, minimum: 0 }
     Message:
       type: object
-      required: [id, matchId, senderId, content, createdAt]
+      required: [id, matchId, senderId, content, createdAt, messageType, attachmentUrl, attachmentName, attachmentContentType, attachmentSize]
       properties:
         id: { type: string, format: uuid }
         matchId: { type: string, format: uuid }
@@ -547,11 +572,35 @@ components:
         content: { type: string }
         createdAt: { type: string, format: date-time }
         readAt: { type: ["string", "null"], format: date-time }
+        messageType: { type: string, enum: [text, voice, image, file] }
+        attachmentUrl: { type: ["string", "null"], format: uri }
+        attachmentName: { type: ["string", "null"] }
+        attachmentContentType: { type: ["string", "null"] }
+        attachmentSize: { type: ["integer", "null"], minimum: 0 }
     MessageInput:
       type: object
-      required: [content]
       properties:
-        content: { type: string, minLength: 1, maxLength: 4000 }
+        content: { type: string, maxLength: 4000 }
+        messageType: { type: string, enum: [text, voice, image, file] }
+        attachmentPath: { type: string, maxLength: 500 }
+        attachmentName: { type: string, maxLength: 180 }
+        attachmentContentType: { type: string, maxLength: 120 }
+        attachmentSize: { type: integer, minimum: 1, maximum: 15728640 }
+    MessageAttachmentUploadInput:
+      type: object
+      required: [fileName, contentType, size, messageType]
+      properties:
+        fileName: { type: string, minLength: 1, maxLength: 180 }
+        contentType: { type: string, minLength: 1, maxLength: 120 }
+        size: { type: integer, minimum: 1, maximum: 15728640 }
+        messageType: { type: string, enum: [voice, image, file] }
+    MessageAttachmentUpload:
+      type: object
+      required: [bucket, objectPath, uploadToken]
+      properties:
+        bucket: { type: string }
+        objectPath: { type: string }
+        uploadToken: { type: string }
     BlockInput:
       type: object
       required: [targetUserId]

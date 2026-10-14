@@ -1,11 +1,11 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, BadgeCheck, Heart, MessageCircle, MoreHorizontal, Send, Sparkles, Video, X } from 'lucide-react';
+import { ArrowRight, BadgeCheck, FileText, Heart, Image as ImageIcon, MessageCircle, Mic, MoreHorizontal, Paperclip, Send, Sparkles, Video, X } from 'lucide-react';
 import { Link } from 'wouter';
 import {
   getDiscoverProfilesQueryKey, getGetMatchesQueryKey, getGetMessagesQueryKey,
   useBlockProfile, useDiscoverProfiles, useGetMatches, useGetMessages,
-  useGetMe, useReportProfile, useSendMessage, useSwipeProfile, useUnmatchProfile,
+  useGetMe, useReportProfile, useRequestMessageAttachmentUploadUrl, useSendMessage, useSwipeProfile, useUnmatchProfile,
 } from '@workspace/api-client-react';
 import { type DiscoverProfilesMode, type DiscoverProfilesParams, type Profile, ReportInputReason } from '@workspace/api-client-react';
 import { AppShell, ChogArtwork, EmptyState, Eyebrow, PageTitle, ProfileAvatar, QueryState } from '@/components/shared';
@@ -143,9 +143,35 @@ export function MessagesPage() {
   const messageKey = getGetMessagesQueryKey(matchId);
   const { data: messages, isLoading, isError, refetch } = useGetMessages(matchId, { query: { enabled:!!matchId, queryKey:messageKey } });
   const [content, setContent] = useState('');
+  const [mediaError, setMediaError] = useState('');
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [voiceDraft, setVoiceDraft] = useState<File | null>(null);
   const send = useSendMessage();
+  const requestUpload = useRequestMessageAttachmentUploadUrl();
   const qc = useQueryClient();
   const currentUserId = currentProfile.data?.profile?.userId;
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const voiceDraftUrl = useMemo(
+    () => voiceDraft ? URL.createObjectURL(voiceDraft) : null,
+    [voiceDraft],
+  );
+  useEffect(() => () => {
+    if (voiceDraftUrl) URL.revokeObjectURL(voiceDraftUrl);
+  }, [voiceDraftUrl]);
+  useEffect(() => {
+    if (!recording) {
+      setRecordingSeconds(0);
+      return;
+    }
+    const timer = window.setInterval(() => setRecordingSeconds(seconds => seconds + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [recording]);
   useEffect(() => {
     const client = supabase;
     if (!matchId || !client) return;
@@ -164,6 +190,121 @@ export function MessagesPage() {
       void client.removeChannel(channel);
     };
   }, [matchId, qc]);
+
+  async function sendMedia(file: File, messageType: 'voice' | 'image' | 'file') {
+    if (!matchId) return;
+    setMediaError('');
+    if (!supabase) {
+      setMediaError('Private file storage is not configured.');
+      return;
+    }
+    if (!file.size || file.size > 15 * 1024 * 1024 || !file.type) {
+      setMediaError('Choose a supported file with a known type, up to 15 MB.');
+      return;
+    }
+    setMediaBusy(true);
+    try {
+      const upload = await requestUpload.mutateAsync({
+        matchId,
+        data: {
+          fileName: file.name.slice(0, 180),
+          contentType: file.type.split(';')[0].trim().toLowerCase(),
+          size: file.size,
+          messageType,
+        },
+      });
+      const { error: uploadError } = await supabase.storage
+        .from(upload.bucket)
+        .uploadToSignedUrl(upload.objectPath, upload.uploadToken, file, {
+          contentType: file.type.split(';')[0].trim().toLowerCase(),
+          cacheControl: '3600',
+        });
+      if (uploadError) throw new Error('The file upload failed. Please try again.');
+      await send.mutateAsync({
+        matchId,
+        data: {
+          messageType,
+          attachmentPath: upload.objectPath,
+          attachmentName: file.name.slice(0, 180),
+          attachmentContentType: file.type.split(';')[0].trim().toLowerCase(),
+          attachmentSize: file.size,
+        },
+      });
+      setVoiceDraft(null);
+      await qc.invalidateQueries({ queryKey: messageKey });
+      await qc.invalidateQueries({ queryKey: getGetMatchesQueryKey() });
+    } catch (error) {
+      setMediaError(error instanceof Error ? error.message : 'The attachment could not be sent.');
+    } finally {
+      setMediaBusy(false);
+    }
+  }
+
+  async function startVoiceRecording() {
+    setMediaError('');
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setMediaError('Voice recording is not supported by this browser.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+      const formats = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+      const mimeType = formats.find(format => MediaRecorder.isTypeSupported(format));
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recorderRef.current = recorder;
+      recorder.ondataavailable = event => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const type = recorder.mimeType || 'audio/webm';
+        const extension = type.includes('mp4') ? 'm4a' : 'webm';
+        const blob = new Blob(audioChunksRef.current, { type });
+        if (blob.size) setVoiceDraft(new File([blob], `voice-message.${extension}`, { type }));
+        stream.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+        recorderRef.current = null;
+        setRecording(false);
+      };
+      recorder.start();
+      setRecording(true);
+    } catch {
+      setMediaError('Microphone access was denied or is unavailable.');
+    }
+  }
+
+  function stopVoiceRecording() {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+  }
+
+  function cancelVoiceRecording() {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = () => {
+        mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+        recorderRef.current = null;
+        audioChunksRef.current = [];
+        setRecording(false);
+      };
+      recorder.stop();
+    } else {
+      mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+      setRecording(false);
+    }
+    setVoiceDraft(null);
+    setMediaError('');
+  }
+
+  function selectAttachment(event: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (file) void sendMedia(file, type);
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!content.trim() || !matchId) return;
@@ -186,11 +327,38 @@ export function MessagesPage() {
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto bg-[radial-gradient(ellipse_at_top,#f7f2ff_0,transparent_68%)] p-5">
           <QueryState loading={isLoading} error={isError} retry={()=>void refetch()}>{messages?.length ? messages.map(message=>{
             const mine=message.senderId===currentUserId;
-            return <div key={message.id} className={`max-w-[82%] rounded-[20px] px-4 py-3 text-sm leading-5 ${mine?'ml-auto rounded-br-md bg-[#7047ff] text-white':'mr-auto rounded-bl-md border border-[#eee5d9] bg-white text-[#51445f]'}`} data-testid={`message-${message.id}`}><p>{message.content}</p><time className={`mt-1 block text-[10px] ${mine?'text-white/70':'text-[#9b8fa0]'}`}>{new Date(message.createdAt).toLocaleString()}</time></div>;
+            return <div key={message.id} className={`max-w-[82%] rounded-[20px] px-4 py-3 text-sm leading-5 ${mine?'ml-auto rounded-br-md bg-[#7047ff] text-white':'mr-auto rounded-bl-md border border-[#eee5d9] bg-white text-[#51445f]'}`} data-testid={`message-${message.id}`}>
+              {message.messageType === 'image' && message.attachmentUrl
+                ? <a href={message.attachmentUrl} target="_blank" rel="noreferrer"><img src={message.attachmentUrl} alt={message.attachmentName || 'Chat attachment'} className="max-h-72 max-w-full rounded-xl object-contain" loading="lazy"/></a>
+                : message.messageType === 'voice' && message.attachmentUrl
+                  ? <audio src={message.attachmentUrl} controls className="max-w-full" aria-label="Voice message"/>
+                  : message.messageType === 'file' && message.attachmentUrl
+                    ? <a href={message.attachmentUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-2 underline underline-offset-2 ${mine?'text-white':'text-[#7047ff]'}`}><FileText size={17}/><span className="break-all">{message.attachmentName || 'Download file'}</span></a>
+                    : <p>{message.content}</p>}
+              {message.messageType !== 'text' && !message.attachmentUrl && <p className="text-xs opacity-80">Attachment unavailable</p>}
+              <time className={`mt-1 block text-[10px] ${mine?'text-white/70':'text-[#9b8fa0]'}`}>{new Date(message.createdAt).toLocaleString()}</time>
+            </div>;
           }) : <div className="m-auto max-w-sm py-10 text-center"><div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[#eee8ff] text-[#7047ff]"><MessageCircle size={20}/></div><h3 className="display text-xl font-extrabold text-[#35264b]">Start with a hello.</h3><p className="mt-2 text-sm leading-5 text-[#8b8091]">This is the beginning of your conversation with {match?.profile.displayName}.</p></div>}</QueryState>
           {send.isError && <p className="text-right text-xs text-[#a34646]" role="alert" data-testid="status-send-error">Message not sent. Please try again.</p>}
+          {mediaError && <p className="text-right text-xs text-[#a34646]" role="alert" data-testid="status-media-error">{mediaError}</p>}
         </div>
-        <form onSubmit={submit} className="flex gap-2 border-t border-[#24133f12] p-4"><input value={content} onChange={e=>setContent(e.target.value)} maxLength={4000} placeholder="Write a message…" className="field flex-1" aria-label="Message" data-testid="input-message"/><button type="submit" disabled={!content.trim()||send.isPending} className="button-primary grid h-12 w-12 shrink-0 place-items-center rounded-2xl disabled:opacity-50" aria-label="Send message" data-testid="button-send-message"><Send size={17}/></button></form>
+        <form onSubmit={submit} className="border-t border-[#24133f12] p-4">
+          {voiceDraft && voiceDraftUrl && <div className="mb-3 flex items-center gap-2 rounded-2xl bg-[#f5f0ff] p-3"><audio src={voiceDraftUrl} controls className="min-w-0 flex-1" aria-label="Voice message preview"/><button type="button" onClick={()=>setVoiceDraft(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[#7357a7]" aria-label="Discard voice message"><X size={17}/></button><button type="button" onClick={()=>void sendMedia(voiceDraft,'voice')} disabled={mediaBusy} className="button-primary rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-50">{mediaBusy?'Sending…':'Send voice'}</button></div>}
+          <div className="flex gap-2">
+            <input value={content} onChange={e=>setContent(e.target.value)} maxLength={4000} placeholder="Write a message…" className="field min-w-0 flex-1" aria-label="Message" data-testid="input-message"/>
+            <button type="submit" disabled={!content.trim()||send.isPending} className="button-primary grid h-12 w-12 shrink-0 place-items-center rounded-2xl disabled:opacity-50" aria-label="Send message" data-testid="button-send-message"><Send size={17}/></button>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" onChange={event=>selectAttachment(event,'image')} aria-label="Choose an image"/>
+            <input ref={fileInputRef} type="file" accept=".pdf,.txt,.zip,.json,.doc,.docx,.xls,.xlsx" className="sr-only" onChange={event=>selectAttachment(event,'file')} aria-label="Choose a file"/>
+            <button type="button" onClick={()=>imageInputRef.current?.click()} disabled={mediaBusy||recording} className="inline-flex items-center gap-1.5 rounded-full border border-[#e5dcef] px-3 py-2 text-xs font-semibold text-[#635178] hover:bg-[#f8f4ff] disabled:opacity-50"><ImageIcon size={15}/>Image</button>
+            <button type="button" onClick={()=>fileInputRef.current?.click()} disabled={mediaBusy||recording} className="inline-flex items-center gap-1.5 rounded-full border border-[#e5dcef] px-3 py-2 text-xs font-semibold text-[#635178] hover:bg-[#f8f4ff] disabled:opacity-50"><Paperclip size={15}/>File</button>
+            {!recording
+              ? <button type="button" onClick={()=>void startVoiceRecording()} disabled={mediaBusy||Boolean(voiceDraft)} className="inline-flex items-center gap-1.5 rounded-full border border-[#e5dcef] px-3 py-2 text-xs font-semibold text-[#635178] hover:bg-[#f8f4ff] disabled:opacity-50"><Mic size={15}/>Record voice</button>
+              : <><span className="text-xs font-semibold text-[#a34646]" aria-live="polite">Recording · {recordingSeconds}s</span><button type="button" onClick={cancelVoiceRecording} className="rounded-full border border-[#e5dcef] px-3 py-2 text-xs font-semibold text-[#635178]">Cancel</button><button type="button" onClick={stopVoiceRecording} className="rounded-full bg-[#7047ff] px-3 py-2 text-xs font-bold text-white"><span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-white"/>Stop</span></button></>}
+            {mediaBusy && <span className="text-xs text-[#8b8091]" role="status">Uploading attachment…</span>}
+          </div>
+        </form>
       </section>
     </div>
   </div></AppShell>;

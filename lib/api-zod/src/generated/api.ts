@@ -537,13 +537,22 @@ export const GetMessagesParams = zod.object({
   "matchId": zod.coerce.string().uuid()
 })
 
+export const getMessagesResponseAttachmentSizeMin = 0;
+
+
+
 export const GetMessagesResponseItem = zod.object({
   "id": zod.string().uuid(),
   "matchId": zod.string().uuid(),
   "senderId": zod.string().uuid(),
   "content": zod.string(),
   "createdAt": zod.coerce.date(),
-  "readAt": zod.coerce.date().nullish()
+  "readAt": zod.coerce.date().nullish(),
+  "messageType": zod.enum(['text', 'voice', 'image', 'file']),
+  "attachmentUrl": zod.string().url().nullable(),
+  "attachmentName": zod.string().nullable(),
+  "attachmentContentType": zod.string().nullable(),
+  "attachmentSize": zod.number().int().min(getMessagesResponseAttachmentSizeMin).nullable()
 })
 export const GetMessagesResponse = zod.array(GetMessagesResponseItem)
 
@@ -557,11 +566,28 @@ export const SendMessageParams = zod.object({
 
 export const sendMessageBodyContentMax = 4000;
 
+export const sendMessageBodyAttachmentPathMax = 500;
+
+export const sendMessageBodyAttachmentNameMax = 180;
+
+export const sendMessageBodyAttachmentContentTypeMax = 120;
+
+export const sendMessageBodyAttachmentSizeMax = 15728640;
+
 
 
 export const SendMessageBody = zod.object({
-  "content": zod.string().min(1).max(sendMessageBodyContentMax)
+  "content": zod.string().max(sendMessageBodyContentMax).optional(),
+  "messageType": zod.enum(['text', 'voice', 'image', 'file']).optional(),
+  "attachmentPath": zod.string().max(sendMessageBodyAttachmentPathMax).optional(),
+  "attachmentName": zod.string().max(sendMessageBodyAttachmentNameMax).optional(),
+  "attachmentContentType": zod.string().max(sendMessageBodyAttachmentContentTypeMax).optional(),
+  "attachmentSize": zod.number().int().min(1).max(sendMessageBodyAttachmentSizeMax).optional()
 })
+
+export const sendMessageResponseAttachmentSizeMin = 0;
+
+
 
 export const SendMessageResponse = zod.object({
   "id": zod.string().uuid(),
@@ -569,7 +595,41 @@ export const SendMessageResponse = zod.object({
   "senderId": zod.string().uuid(),
   "content": zod.string(),
   "createdAt": zod.coerce.date(),
-  "readAt": zod.coerce.date().nullish()
+  "readAt": zod.coerce.date().nullish(),
+  "messageType": zod.enum(['text', 'voice', 'image', 'file']),
+  "attachmentUrl": zod.string().url().nullable(),
+  "attachmentName": zod.string().nullable(),
+  "attachmentContentType": zod.string().nullable(),
+  "attachmentSize": zod.number().int().min(sendMessageResponseAttachmentSizeMin).nullable()
+})
+
+
+/**
+ * @summary Request a one-time upload token for a private chat attachment
+ */
+export const RequestMessageAttachmentUploadUrlParams = zod.object({
+  "matchId": zod.coerce.string().uuid()
+})
+
+export const requestMessageAttachmentUploadUrlBodyFileNameMax = 180;
+
+export const requestMessageAttachmentUploadUrlBodyContentTypeMax = 120;
+
+export const requestMessageAttachmentUploadUrlBodySizeMax = 15728640;
+
+
+
+export const RequestMessageAttachmentUploadUrlBody = zod.object({
+  "fileName": zod.string().min(1).max(requestMessageAttachmentUploadUrlBodyFileNameMax),
+  "contentType": zod.string().min(1).max(requestMessageAttachmentUploadUrlBodyContentTypeMax),
+  "size": zod.number().int().min(1).max(requestMessageAttachmentUploadUrlBodySizeMax),
+  "messageType": zod.enum(['voice', 'image', 'file'])
+})
+
+export const RequestMessageAttachmentUploadUrlResponse = zod.object({
+  "bucket": zod.string(),
+  "objectPath": zod.string(),
+  "uploadToken": zod.string()
 })
 
 
