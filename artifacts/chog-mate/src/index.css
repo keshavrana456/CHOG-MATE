@@ -163,10 +163,6 @@
 .home-page { color:#f8f3ff; }
 .home-hero { position:relative; }
 .home-hero-gif { display:block;width:100%;height:100%;object-fit:contain;object-position:center;filter:drop-shadow(0 14px 32px rgba(15,5,25,.38)); }
-.home-orbit { position:absolute;border-radius:999px;pointer-events:none; }
-.home-orbit-one { inset:8% 6%;border:1px solid rgba(201,158,245,.28);transform:rotate(-12deg); }
-.home-orbit-two { inset:14% 11%;border:1px dashed rgba(208,172,247,.24);transform:rotate(13deg); }
-.home-hero-art::before { content:"";position:absolute;width:74%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(166,113,224,.31),rgba(74,48,107,.16) 62%,transparent 72%); }
 .home-text-link { color:#d7baff;transition:color .2s,transform .2s; }
 .home-text-link:hover { color:white;transform:translateX(2px); }
 .home-step { transition:transform .22s,box-shadow .22s; }
@@ -181,8 +177,7 @@
 .home-sale-card { text-decoration:none; }
 .home-stat { min-height:138px; }
 .home-data-state { min-height:180px; }
-.home-art-note,.home-hero .inline-flex.rounded-full.border { background:rgba(38,27,53,.85);border-color:rgba(192,153,227,.24);color:#f4eaff; }
-.home-hero .home-art-note .display { color:#fff!important; }
+.home-hero .inline-flex.rounded-full.border { background:rgba(38,27,53,.85);border-color:rgba(192,153,227,.24);color:#f4eaff; }
 .home-hero .border-t { border-color:rgba(195,158,228,.2)!important; }
 
 /* Keep old utility color classes legible while giving every route the same ink-plum system. */
@@ -203,15 +198,12 @@ select option { background:#251a32;color:#f6efff; }
 .mobile-tabbar a.active { color:#fff; }
 .home-page .border-t { border-color:rgba(190,157,220,.2)!important; }
 .home-page [class*="bg-[#f"] { background-color:rgba(128,89,164,.22)!important; }
-.home-page .home-hero .home-art-note { color:#f4eaff; }
 
 @media (max-width:767px) {
   .chat-panel { height:min(660px,calc(100dvh - 270px));min-height:400px; }
   .chat-conversation-list { max-height:110px;overflow-y:hidden; }
   .home-hero-art { min-height:330px; }
   .home-hero-gif-wrap { height:310px; }
-  .home-orbit-one { inset:8% 4%; }
-  .home-orbit-two { inset:15% 10%; }
   .home-blind-mark { right:6%;top:25%;width:54px;height:54px;border-radius:19px; }
   .home-blind-mark svg { width:22px; }
 }

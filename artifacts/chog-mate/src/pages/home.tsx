@@ -19,7 +19,7 @@ import {
 import { AppShell, Eyebrow } from '@/components/shared';
 
 const WalletAuthPanel = lazy(() => import('@/components/wallet-auth'));
-const chogGif = `${import.meta.env.BASE_URL}chog-idle.gif`;
+const chogGif = 'https://media1.tenor.com/m/O3waRaZ2i4AAAAAC/chog-monad.gif';
 
 export default function HomePage() {
   const [showWallet, setShowWallet] = useState(false);
@@ -131,27 +131,15 @@ export default function HomePage() {
           </div>
 
           <div className="home-hero-art relative mx-auto flex min-h-[360px] w-full max-w-[530px] items-center justify-center sm:min-h-[455px]">
-            <div className="home-orbit home-orbit-one" aria-hidden="true" />
-            <div className="home-orbit home-orbit-two" aria-hidden="true" />
             <div className="home-hero-gif-wrap relative z-[1] flex h-[340px] w-full max-w-[420px] items-center justify-center sm:h-[430px]">
               <img
                 src={chogGif}
-                alt="Chog waving gently"
+                alt="Chog dancing"
                 className="home-hero-gif"
-                width="420"
-                height="390"
+                width="300"
+                height="300"
                 fetchPriority="high"
               />
-            </div>
-            <div className="home-art-note absolute bottom-4 left-0 z-[2] hidden rounded-2xl border border-white/80 bg-white/75 px-4 py-3 shadow-[0_12px_38px_rgba(64,47,78,.11)] backdrop-blur-xl sm:block">
-              <Eyebrow>Same collection</Eyebrow>
-              <p className="display text-lg font-extrabold text-[#24133f]">
-                Different stories.
-              </p>
-            </div>
-            <div className="absolute right-0 top-[14%] z-[2] inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/75 px-3 py-2 text-[10px] font-bold uppercase tracking-[.12em] text-[#503877] shadow-sm backdrop-blur-xl">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#6eaf70]" />
-              Made for Chog holders
             </div>
           </div>
         </section>
