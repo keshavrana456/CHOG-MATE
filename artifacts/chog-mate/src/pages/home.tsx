@@ -19,7 +19,7 @@ import {
 import { AppShell, Eyebrow } from '@/components/shared';
 
 const WalletAuthPanel = lazy(() => import('@/components/wallet-auth'));
-const chogGif = 'https://media1.tenor.com/m/O3waRaZ2i4AAAAAC/chog-monad.gif';
+const chogGif = 'https://media1.tenor.com/m/ZsVXpYhoKiQAAAAd/waweonline-wawe.gif';
 
 export default function HomePage() {
   const [showWallet, setShowWallet] = useState(false);
@@ -134,7 +134,7 @@ export default function HomePage() {
             <div className="home-hero-gif-wrap relative z-[1] flex aspect-square w-full max-w-[420px] items-center justify-center">
               <img
                 src={chogGif}
-                alt="Chog dancing"
+                alt="Animated purple Chog by Waweonline"
                 className="home-hero-gif"
                 width="300"
                 height="300"

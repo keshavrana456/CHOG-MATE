@@ -6,9 +6,8 @@ import type { Chog, Profile } from '@workspace/api-client-react';
 export function Brand({ inverse = false }: { inverse?: boolean }) {
   return <Link href="/" className="inline-flex items-center gap-3" data-testid="link-brand">
     <img
-      src={`${import.meta.env.BASE_URL}chog-idle.gif`}
-      alt=""
-      aria-hidden="true"
+      src="https://media1.tenor.com/m/I4kaCEPTjMUAAAAd/chog-monad.gif"
+      alt="Chog waving hello"
       width={40}
       height={40}
       className="brand-mark"
