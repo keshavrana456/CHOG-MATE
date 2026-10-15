@@ -131,7 +131,7 @@ export default function HomePage() {
           </div>
 
           <div className="home-hero-art relative mx-auto flex min-h-[360px] w-full max-w-[530px] items-center justify-center sm:min-h-[455px]">
-            <div className="home-hero-gif-wrap relative z-[1] flex h-[340px] w-full max-w-[420px] items-center justify-center sm:h-[430px]">
+            <div className="home-hero-gif-wrap relative z-[1] flex aspect-square w-full max-w-[420px] items-center justify-center">
               <img
                 src={chogGif}
                 alt="Chog dancing"

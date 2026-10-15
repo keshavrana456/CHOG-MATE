@@ -162,7 +162,7 @@
 .chat-conversation-list { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
 .home-page { color:#f8f3ff; }
 .home-hero { position:relative; }
-.home-hero-gif { display:block;width:100%;height:100%;object-fit:contain;object-position:center;filter:drop-shadow(0 14px 32px rgba(15,5,25,.38)); }
+.home-hero-gif { display:block;width:100%;height:100%;border-radius:50%;object-fit:contain;object-position:center;filter:drop-shadow(0 14px 32px rgba(15,5,25,.38)); }
 .home-text-link { color:#d7baff;transition:color .2s,transform .2s; }
 .home-text-link:hover { color:white;transform:translateX(2px); }
 .home-step { transition:transform .22s,box-shadow .22s; }
@@ -203,7 +203,6 @@ select option { background:#251a32;color:#f6efff; }
   .chat-panel { height:min(660px,calc(100dvh - 270px));min-height:400px; }
   .chat-conversation-list { max-height:110px;overflow-y:hidden; }
   .home-hero-art { min-height:330px; }
-  .home-hero-gif-wrap { height:310px; }
   .home-blind-mark { right:6%;top:25%;width:54px;height:54px;border-radius:19px; }
   .home-blind-mark svg { width:22px; }
 }
