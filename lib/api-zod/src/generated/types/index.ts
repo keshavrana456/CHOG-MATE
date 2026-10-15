@@ -14,6 +14,7 @@ export * from './currentProfile';
 export * from './discoverProfilesMode';
 export * from './discoverProfilesParams';
 export * from './discoveryPage';
+export * from './getLiveSalesParams';
 export * from './healthStatus';
 export * from './liveSale';
 export * from './liveSales';

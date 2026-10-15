@@ -105,10 +105,17 @@ paths:
     get:
       operationId: getLiveSales
       tags: [nft]
-      summary: Get recent real Chog Genesis sales
+      summary: Get a page of real Chog Genesis sales
+      parameters:
+        - name: next
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 2000
       responses:
         "200":
-          description: Recent indexed sales
+          description: Indexed sales and the cursor for the next older page
           content:
             application/json:
               schema:
@@ -428,11 +435,12 @@ components:
         timestamp: { type: string, format: date-time }
     LiveSales:
       type: object
-      required: [sales, updatedAt]
+      required: [sales, next, updatedAt]
       properties:
         sales:
           type: array
           items: { $ref: "#/components/schemas/LiveSale" }
+        next: { type: ["string", "null"] }
         updatedAt: { type: string, format: date-time }
     CollectionStats:
       type: object

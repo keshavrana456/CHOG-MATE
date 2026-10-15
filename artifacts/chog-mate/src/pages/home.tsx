@@ -1,8 +1,11 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useLayoutEffect, useRef, useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import {
   ArrowDownRight,
   ArrowRight,
   BadgeCheck,
+  ChevronLeft,
+  ChevronRight,
   Heart,
   ImageOff,
   MessageCircleHeart,
@@ -13,23 +16,74 @@ import {
 import {
   getGetCollectionStatsQueryKey,
   getGetLiveSalesQueryKey,
+  getLiveSales,
   useGetCollectionStats,
-  useGetLiveSales,
 } from '@workspace/api-client-react';
 import { AppShell, Eyebrow } from '@/components/shared';
 
 const WalletAuthPanel = lazy(() => import('@/components/wallet-auth'));
-const chogGif = 'https://media1.tenor.com/m/ZsVXpYhoKiQAAAAd/waweonline-wawe.gif';
+const chogGif = 'https://media1.tenor.com/m/O3waRaZ2i4AAAAAC/chog-monad.gif';
+const secondaryChogGif = 'https://media1.tenor.com/m/ZsVXpYhoKiQAAAAd/waweonline-wawe.gif';
+const secondaryChogGifPage = 'https://tenor.com/view/waweonline-wawe-monad-chog-gmonad-gif-7405421530750396964';
 
 export default function HomePage() {
   const [showWallet, setShowWallet] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const sales = useGetLiveSales({
-    query: { queryKey: getGetLiveSalesQueryKey(), refetchInterval: 60_000, retry: 1 },
+  const [canScrollSalesLeft, setCanScrollSalesLeft] = useState(false);
+  const [canScrollSalesRight, setCanScrollSalesRight] = useState(false);
+  const salesScrollerRef = useRef<HTMLDivElement>(null);
+  const sales = useInfiniteQuery({
+    queryKey: getGetLiveSalesQueryKey(),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) =>
+      getLiveSales(pageParam ? { next: pageParam } : undefined, { signal }),
+    getNextPageParam: (lastPage) => lastPage.next ?? undefined,
+    refetchInterval: 60_000,
+    retry: 1,
   });
+  const saleItems = sales.data?.pages.flatMap((page) => page.sales) ?? [];
   const stats = useGetCollectionStats({
     query: { queryKey: getGetCollectionStatsQueryKey(), refetchInterval: 120_000, retry: 1 },
   });
+
+  useLayoutEffect(() => {
+    const scroller = salesScrollerRef.current;
+    if (!scroller) return;
+
+    const updateScrollButtons = () => {
+      const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+      setCanScrollSalesLeft(scroller.scrollLeft > 1);
+      setCanScrollSalesRight(
+        scroller.scrollLeft < maxScrollLeft - 1 || Boolean(sales.hasNextPage),
+      );
+    };
+
+    updateScrollButtons();
+    const resizeObserver = new ResizeObserver(updateScrollButtons);
+    resizeObserver.observe(scroller);
+    return () => resizeObserver.disconnect();
+  }, [saleItems.length, sales.hasNextPage]);
+
+  function scrollSales(direction: -1 | 1) {
+    const scroller = salesScrollerRef.current;
+    if (!scroller) return;
+
+    const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+    if (
+      direction > 0 &&
+      scroller.scrollLeft >= maxScrollLeft - 2 &&
+      sales.hasNextPage &&
+      !sales.isFetchingNextPage
+    ) {
+      void sales.fetchNextPage();
+      return;
+    }
+
+    scroller.scrollBy({
+      left: direction * Math.max(240, scroller.clientWidth * 0.8),
+      behavior: 'smooth',
+    });
+  }
 
   function connect() {
     setFeedback('');
@@ -134,7 +188,7 @@ export default function HomePage() {
             <div className="home-hero-gif-wrap relative z-[1] flex aspect-square w-full max-w-[420px] items-center justify-center">
               <img
                 src={chogGif}
-                alt="Animated purple Chog by Waweonline"
+                alt="Chog dancing"
                 className="home-hero-gif"
                 width="300"
                 height="300"
@@ -159,17 +213,43 @@ export default function HomePage() {
               </h2>
               <p className="mt-2 max-w-xl text-sm leading-6 text-[#786d80]">
                 Recent sales from OpenSea’s collection feed. No sample listings,
-                no made-up prices.
+                no made-up prices. Scroll left to right to browse older sales.
               </p>
             </div>
-            <a
-              href="https://opensea.io/collection/chog-genesis"
-              target="_blank"
-              rel="noreferrer"
-              className="home-text-link inline-flex w-fit items-center gap-2 rounded-full px-1 py-2 text-xs font-bold"
-            >
-              View collection <ArrowRight size={14} />
-            </a>
+            <div className="flex items-center gap-3 self-start sm:self-end">
+              {saleItems.length > 0 && (
+                <div className="home-sales-controls" role="group" aria-label="Browse live sales">
+                  <button
+                    type="button"
+                    className="home-sales-arrow"
+                    aria-label="Scroll toward newer sales"
+                    disabled={!canScrollSalesLeft}
+                    onClick={() => scrollSales(-1)}
+                    data-testid="button-live-sales-left"
+                  >
+                    <ChevronLeft size={18} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="home-sales-arrow"
+                    aria-label="Scroll toward older sales"
+                    disabled={!canScrollSalesRight}
+                    onClick={() => scrollSales(1)}
+                    data-testid="button-live-sales-right"
+                  >
+                    <ChevronRight size={18} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+              <a
+                href="https://opensea.io/collection/chog-genesis"
+                target="_blank"
+                rel="noreferrer"
+                className="home-text-link inline-flex w-fit items-center gap-2 rounded-full px-1 py-2 text-xs font-bold"
+              >
+                View collection <ArrowRight size={14} />
+              </a>
+            </div>
           </div>
 
           {sales.isLoading ? (
@@ -190,7 +270,7 @@ export default function HomePage() {
               description="The marketplace feed isn’t available right now. We won’t substitute sample sales."
               testId="state-live-sales-unavailable"
             />
-          ) : !sales.data || sales.data.sales.length === 0 ? (
+          ) : saleItems.length === 0 ? (
             <LiveDataState
               title="NO LIVE SALES"
               description="Live Chog sales will appear here."
@@ -198,8 +278,30 @@ export default function HomePage() {
             />
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {sales.data.sales.map((sale) => (
+              <div
+                ref={salesScrollerRef}
+                className="home-sales-scroller"
+                role="region"
+                aria-label="Live Chog sale history. Scroll left and right to browse sales."
+                tabIndex={0}
+                onScroll={(event) => {
+                  const scroller = event.currentTarget;
+                  const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+                  setCanScrollSalesLeft(scroller.scrollLeft > 1);
+                  setCanScrollSalesRight(
+                    scroller.scrollLeft < maxScrollLeft - 1 || Boolean(sales.hasNextPage),
+                  );
+                  if (
+                    scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 180 &&
+                    sales.hasNextPage &&
+                    !sales.isFetchingNextPage
+                  ) {
+                    void sales.fetchNextPage();
+                  }
+                }}
+              >
+                <div className="home-sales-track">
+                {saleItems.map((sale) => (
                   <a
                     key={`${sale.tokenId}-${sale.timestamp}`}
                     href={sale.saleUrl}
@@ -245,9 +347,15 @@ export default function HomePage() {
                     </div>
                   </a>
                 ))}
+                </div>
               </div>
+              {sales.isFetchingNextPage && (
+                <p className="mt-3 text-xs text-[#968a9b]" role="status">
+                  Loading older sales…
+                </p>
+              )}
               <p className="mt-4 text-right text-[10px] text-[#968a9b]">
-                Feed updated {formatTimeAgo(sales.data.updatedAt)}
+                Feed updated {formatTimeAgo(sales.data?.pages[0]?.updatedAt ?? '')}
               </p>
             </>
           )}
@@ -353,7 +461,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="home-blind mx-auto my-5 max-w-[1240px] overflow-hidden rounded-[30px] border border-[#dacbf3] px-6 py-8 sm:px-10 sm:py-10">
+        <section id="blind-chog" className="home-blind mx-auto my-5 grid max-w-[1240px] items-center gap-8 overflow-hidden rounded-[30px] border border-[#dacbf3] px-6 py-8 sm:px-10 sm:py-10 md:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
           <div className="relative z-[1] max-w-2xl">
             <Eyebrow>A different kind of first impression</Eyebrow>
             <h2 className="display text-[29px] font-extrabold leading-tight text-[#24133f] sm:text-[36px]">
@@ -365,9 +473,21 @@ export default function HomePage() {
               artwork takes center stage. Blind Chog isn’t available yet.
             </p>
           </div>
-          <div className="home-blind-mark" aria-hidden="true">
-            <Heart size={34} strokeWidth={1.3} />
-          </div>
+          <figure className="home-blind-visual relative z-[1] flex justify-center">
+            <a
+              href={secondaryChogGifPage}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="View the original animated Chog by Waweonline on Tenor"
+            >
+              <img
+                src={secondaryChogGif}
+                alt="Animated Chog by Waweonline"
+                loading="eager"
+                decoding="async"
+              />
+            </a>
+          </figure>
         </section>
 
         <section className="home-final-cta mx-auto my-10 max-w-[1240px] rounded-[30px] px-6 py-10 text-center sm:my-14 sm:px-12 sm:py-14">

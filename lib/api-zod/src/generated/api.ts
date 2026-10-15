@@ -105,8 +105,16 @@ export const GetNftOwnershipResponse = zod.object({
 
 
 /**
- * @summary Get recent real Chog Genesis sales
+ * @summary Get a page of real Chog Genesis sales
  */
+export const getLiveSalesQueryNextMax = 2000;
+
+
+
+export const GetLiveSalesQueryParams = zod.object({
+  "next": zod.coerce.string().max(getLiveSalesQueryNextMax).optional()
+})
+
 export const GetLiveSalesResponse = zod.object({
   "sales": zod.array(zod.object({
   "tokenId": zod.string(),
@@ -117,6 +125,7 @@ export const GetLiveSalesResponse = zod.object({
   "saleUrl": zod.string().url(),
   "timestamp": zod.coerce.date()
 })),
+  "next": zod.string().nullable(),
   "updatedAt": zod.coerce.date()
 })
 

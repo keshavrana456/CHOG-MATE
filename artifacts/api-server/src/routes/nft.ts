@@ -21,9 +21,18 @@ import {
 const router: IRouter = Router();
 
 router.get("/nft/live-sales", async (req, res): Promise<void> => {
+  const cursor = req.query.next;
+  if (
+    cursor !== undefined &&
+    (typeof cursor !== "string" || cursor.length > 2_000)
+  ) {
+    res.status(400).json({ error: "Invalid sales page request." });
+    return;
+  }
+
   try {
-    const sales = await getLiveSales();
-    res.json({ sales, updatedAt: new Date().toISOString() });
+    const page = await getLiveSales(typeof cursor === "string" ? cursor : undefined);
+    res.json({ ...page, updatedAt: new Date().toISOString() });
   } catch (error) {
     const statusCode =
       error instanceof NftIndexerError ? error.statusCode : 503;

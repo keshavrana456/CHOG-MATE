@@ -89,6 +89,8 @@ export interface LiveSale {
 
 export interface LiveSales {
   sales: LiveSale[];
+  /** @nullable */
+  next: string | null;
   updatedAt: string;
 }
 
@@ -370,6 +372,13 @@ export interface ReportInput {
      */
   details?: string | null;
 }
+
+export type GetLiveSalesParams = {
+/**
+ * @maxLength 2000
+ */
+next?: string;
+};
 
 export type DiscoverProfilesParams = {
 mode?: DiscoverProfilesMode;

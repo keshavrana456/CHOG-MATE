@@ -30,6 +30,11 @@ export interface LiveSale {
   timestamp: string;
 }
 
+export interface LiveSalesPage {
+  sales: LiveSale[];
+  next: string | null;
+}
+
 export interface PriceMetric {
   amount: string;
   currency: string;
@@ -48,7 +53,7 @@ interface TimedValue<T> {
   value: T;
 }
 
-let liveSalesCache: TimedValue<LiveSale[]> | null = null;
+const liveSalesCache = new Map<string, TimedValue<LiveSalesPage>>();
 let collectionStatsCache: TimedValue<CollectionStats> | null = null;
 
 export class NftIndexerError extends Error {
@@ -121,15 +126,15 @@ export async function getChogCollectionPage(
   };
 }
 
-export async function getLiveSales(): Promise<LiveSale[]> {
-  if (liveSalesCache && liveSalesCache.expiresAt > Date.now()) {
-    return liveSalesCache.value;
-  }
+export async function getLiveSales(cursor?: string): Promise<LiveSalesPage> {
+  const cacheKey = cursor ?? "";
+  const cached = liveSalesCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   const url = new URL(`${OPENSEA_API_URL}/events/collection/${OPENSEA_COLLECTION_SLUG}`);
   url.searchParams.set("event_type", "sale");
-  url.searchParams.set("limit", "20");
-  url.searchParams.set("after", String(Math.floor(Date.now() / 1000) - 48 * 60 * 60));
+  url.searchParams.set("limit", "50");
+  if (cursor) url.searchParams.set("next", cursor);
   const payload = await requestOpenSea(url);
   if (!payload || typeof payload !== "object") {
     throw new NftIndexerError("Marketplace returned invalid sale data.", 502);
@@ -155,9 +160,14 @@ export async function getLiveSales(): Promise<LiveSale[]> {
         : null;
       const tokenId = nft?.identifier;
       const contract = nft?.contract;
-      const timestamp = typeof event.event_timestamp === "number"
-        ? event.event_timestamp
-        : Number(event.event_timestamp);
+      const rawTimestamp = event.event_timestamp;
+      const timestamp = typeof rawTimestamp === "number"
+        ? rawTimestamp
+        : typeof rawTimestamp === "string"
+          ? /^\d+$/.test(rawTimestamp)
+            ? Number(rawTimestamp)
+            : Date.parse(rawTimestamp) / 1_000
+          : Number.NaN;
       const quantity = payment?.quantity;
       const decimals = payment?.decimals;
       const currency = payment?.symbol;
@@ -210,11 +220,23 @@ export async function getLiveSales(): Promise<LiveSale[]> {
         timestamp: new Date(timestamp * 1000).toISOString(),
       }];
     })
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-    .slice(0, 6);
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
-  liveSalesCache = { value: sales, expiresAt: Date.now() + MARKETPLACE_CACHE_MS };
-  return sales;
+  const result: LiveSalesPage = {
+    sales,
+    next: typeof (payload as { next?: unknown }).next === "string"
+      ? (payload as { next: string }).next
+      : null,
+  };
+  liveSalesCache.set(cacheKey, {
+    value: result,
+    expiresAt: Date.now() + MARKETPLACE_CACHE_MS,
+  });
+  if (liveSalesCache.size > 20) {
+    const oldestKey = liveSalesCache.keys().next().value;
+    if (oldestKey !== undefined) liveSalesCache.delete(oldestKey);
+  }
+  return result;
 }
 
 export async function getCollectionStats(): Promise<CollectionStats> {

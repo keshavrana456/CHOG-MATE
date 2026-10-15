@@ -27,6 +27,7 @@ import type {
   CurrentProfile,
   DiscoverProfilesParams,
   DiscoveryPage,
+  GetLiveSalesParams,
   HealthStatus,
   LiveSales,
   Match,
@@ -477,20 +478,27 @@ export function useGetNftOwnership<TData = Awaited<ReturnType<typeof getNftOwner
 
 
 
-export const getGetLiveSalesUrl = () => {
+export const getGetLiveSalesUrl = (params?: GetLiveSalesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/nft/live-sales`
+  return stringifiedParams.length > 0 ? `/api/nft/live-sales?${stringifiedParams}` : `/api/nft/live-sales`
 }
 
 /**
- * @summary Get recent real Chog Genesis sales
+ * @summary Get a page of real Chog Genesis sales
  */
-export const getLiveSales = async ( options?: Parameters<typeof customFetch>[1]): Promise<LiveSales> => {
+export const getLiveSales = async (params?: GetLiveSalesParams, options?: Parameters<typeof customFetch>[1]): Promise<LiveSales> => {
 
-  return customFetch<LiveSales>(getGetLiveSalesUrl(),
+  return customFetch<LiveSales>(getGetLiveSalesUrl(params),
   {
     ...options,
     method: 'GET'
@@ -503,23 +511,23 @@ export const getLiveSales = async ( options?: Parameters<typeof customFetch>[1])
 
 
 
-export const getGetLiveSalesQueryKey = () => {
+export const getGetLiveSalesQueryKey = (params?: GetLiveSalesParams,) => {
     return [
-    `/api/nft/live-sales`
+    `/api/nft/live-sales`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetLiveSalesQueryOptions = <TData = Awaited<ReturnType<typeof getLiveSales>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLiveSales>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetLiveSalesQueryOptions = <TData = Awaited<ReturnType<typeof getLiveSales>>, TError = ErrorType<void>>(params?: GetLiveSalesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLiveSales>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetLiveSalesQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetLiveSalesQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLiveSales>>> = ({ signal }) => getLiveSales({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLiveSales>>> = ({ signal }) => getLiveSales(params, { signal, ...requestOptions });
 
 
 
@@ -533,15 +541,15 @@ export type GetLiveSalesQueryError = ErrorType<void>
 
 
 /**
- * @summary Get recent real Chog Genesis sales
+ * @summary Get a page of real Chog Genesis sales
  */
 
 export function useGetLiveSales<TData = Awaited<ReturnType<typeof getLiveSales>>, TError = ErrorType<void>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLiveSales>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetLiveSalesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLiveSales>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetLiveSalesQueryOptions(options)
+  const queryOptions = getGetLiveSalesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

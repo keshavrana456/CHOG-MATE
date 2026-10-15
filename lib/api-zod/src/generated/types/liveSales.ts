@@ -9,5 +9,7 @@ import type { LiveSale } from './liveSale';
 
 export interface LiveSales {
   sales: LiveSale[];
+  /** @nullable */
+  next: string | null;
   updatedAt: Date;
 }
