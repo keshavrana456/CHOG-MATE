@@ -292,17 +292,17 @@ export default function HomePage() {
               error={stats.isError}
             />
             <StatCard
-              label="Top floor"
+              label="Top offer"
               value={
                 stats.data
-                  ? stats.data.topFloor
-                    ? `${formatAmount(stats.data.topFloor.amount)} ${stats.data.topFloor.currency}`
-                    : 'Not reported'
+                  ? stats.data.topOffer
+                    ? `${formatAmount(stats.data.topOffer.amount)} ${stats.data.topOffer.currency}`
+                    : 'No active offers'
                   : 'Unavailable'
               }
               loading={stats.isLoading}
               error={stats.isError}
-              detail="Not provided by the current marketplace stats endpoint."
+              detail="Best active collection offer on OpenSea."
             />
             <StatCard
               label="Total volume"
@@ -313,6 +313,7 @@ export default function HomePage() {
               }
               loading={stats.isLoading}
               error={stats.isError}
+              detail="ETH volume converted to MON using a live exchange rate."
             />
             <StatCard
               label="Total holders"

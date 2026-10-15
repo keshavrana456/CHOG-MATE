@@ -5,6 +5,8 @@ const OPENSEA_COLLECTION_SLUG = "chog-genesis";
 const CHOG_CONTRACT_ADDRESS = "0xc96d31f8626c6d03fae5dcd3d61e3fb9f4a73763";
 const CHOG_OPENSEA_URL = `https://opensea.io/assets/monad/${CHOG_CONTRACT_ADDRESS}`;
 const MARKETPLACE_CACHE_MS = 60_000;
+const MON_ETH_PRICE_URL =
+  "https://coins.llama.fi/prices/current/coingecko:monad,coingecko:ethereum";
 
 export interface ChogCollectionItem {
   tokenId: string;
@@ -35,7 +37,7 @@ export interface PriceMetric {
 
 export interface CollectionStats {
   floorPrice: PriceMetric | null;
-  topFloor: PriceMetric | null;
+  topOffer: PriceMetric | null;
   totalVolume: PriceMetric | null;
   totalHolders: number | null;
   updatedAt: string;
@@ -237,7 +239,7 @@ export async function getCollectionStats(): Promise<CollectionStats> {
     metrics.floor_price_symbol,
     true,
   );
-  const totalVolume = metricFromProvider(
+  const rawTotalVolume = metricFromProvider(
     metrics.volume,
     metrics.volume_symbol,
     false,
@@ -249,17 +251,130 @@ export async function getCollectionStats(): Promise<CollectionStats> {
       ? metrics.num_owners
       : null;
 
+  const [topOffer, totalVolume] = await Promise.all([
+    getTopCollectionOffer(),
+    convertVolumeToMonad(rawTotalVolume),
+  ]);
+
   const value: CollectionStats = {
     floorPrice,
-    // OpenSea's stats endpoint does not define or return a "top floor" metric.
-    // Leave it unavailable rather than assigning a made-up interpretation.
-    topFloor: null,
+    topOffer,
     totalVolume,
     totalHolders,
     updatedAt: new Date().toISOString(),
   };
   collectionStatsCache = { value, expiresAt: Date.now() + MARKETPLACE_CACHE_MS };
   return value;
+}
+
+async function getTopCollectionOffer(): Promise<PriceMetric | null> {
+  const url = new URL(`${OPENSEA_API_URL}/offers/collection/${OPENSEA_COLLECTION_SLUG}`);
+  url.searchParams.set("limit", "10");
+  const payload = await requestOpenSea(url);
+  if (!payload || typeof payload !== "object") {
+    throw new NftIndexerError("Marketplace returned invalid collection offers.", 502);
+  }
+  const offers = (payload as { offers?: unknown }).offers;
+  if (!Array.isArray(offers)) {
+    throw new NftIndexerError("Marketplace returned invalid collection offers.", 502);
+  }
+
+  for (const value of offers) {
+    if (!value || typeof value !== "object") continue;
+    const offer = value as Record<string, unknown>;
+    if (
+      typeof offer.status === "string" &&
+      offer.status.toUpperCase() !== "ACTIVE"
+    ) continue;
+    if (
+      typeof offer.chain === "string" &&
+      offer.chain.toLowerCase() !== "monad"
+    ) continue;
+
+    const price = offer.price_per_item && typeof offer.price_per_item === "object"
+      ? offer.price_per_item as Record<string, unknown>
+      : offer.price && typeof offer.price === "object"
+        ? offer.price as Record<string, unknown>
+        : null;
+    const rawValue = price?.value;
+    const decimals = price?.decimals;
+    const currency = price?.currency;
+    if (
+      (typeof rawValue !== "string" && typeof rawValue !== "number") ||
+      typeof decimals !== "number" ||
+      !Number.isInteger(decimals) ||
+      decimals < 0 ||
+      decimals > 36 ||
+      typeof currency !== "string" ||
+      !currency.trim()
+    ) continue;
+
+    try {
+      const rawAmount = BigInt(rawValue);
+      if (rawAmount <= 0n) continue;
+      return { amount: formatUnits(rawAmount, decimals), currency: currency.trim() };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function convertVolumeToMonad(
+  metric: PriceMetric | null,
+): Promise<PriceMetric | null> {
+  if (!metric) return null;
+  const currency = metric.currency.trim().toUpperCase();
+  if (currency === "MON") return { amount: metric.amount, currency: "MON" };
+  if (currency !== "ETH" && currency !== "WETH") {
+    throw new NftIndexerError(
+      `Cannot convert collection volume from ${metric.currency} to MON.`,
+      502,
+    );
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(MON_ETH_PRICE_URL, {
+      signal: AbortSignal.timeout(8_000),
+    });
+  } catch {
+    throw new NftIndexerError("The live MON/ETH conversion rate is unavailable.", 503);
+  }
+  if (!response.ok) {
+    throw new NftIndexerError("The live MON/ETH conversion rate is unavailable.", 503);
+  }
+
+  const payload: unknown = await response.json().catch(() => null);
+  if (!payload || typeof payload !== "object" || !("coins" in payload)) {
+    throw new NftIndexerError("The live MON/ETH conversion rate is invalid.", 502);
+  }
+  const coins = (payload as { coins?: Record<string, unknown> }).coins;
+  const mon = coins?.["coingecko:monad"];
+  const eth = coins?.["coingecko:ethereum"];
+  if (!mon || typeof mon !== "object" || !eth || typeof eth !== "object") {
+    throw new NftIndexerError("The live MON/ETH conversion rate is incomplete.", 502);
+  }
+
+  const monPrice = (mon as { price?: unknown; timestamp?: unknown }).price;
+  const monTimestamp = (mon as { timestamp?: unknown }).timestamp;
+  const ethPrice = (eth as { price?: unknown; timestamp?: unknown }).price;
+  const ethTimestamp = (eth as { timestamp?: unknown }).timestamp;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (
+    typeof monPrice !== "number" || !Number.isFinite(monPrice) || monPrice <= 0 ||
+    typeof ethPrice !== "number" || !Number.isFinite(ethPrice) || ethPrice <= 0 ||
+    typeof monTimestamp !== "number" || nowSeconds - monTimestamp > 15 * 60 ||
+    typeof ethTimestamp !== "number" || nowSeconds - ethTimestamp > 15 * 60
+  ) {
+    throw new NftIndexerError("The live MON/ETH conversion rate is stale or invalid.", 503);
+  }
+
+  const totalVolume = Number(metric.amount) * ethPrice / monPrice;
+  if (!Number.isFinite(totalVolume) || totalVolume < 0) {
+    throw new NftIndexerError("Collection volume could not be converted to MON.", 502);
+  }
+  return { amount: totalVolume.toFixed(6), currency: "MON" };
 }
 
 async function requestOpenSea(url: URL): Promise<unknown> {

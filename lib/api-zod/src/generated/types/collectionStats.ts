@@ -9,7 +9,7 @@ import type { PriceMetric } from './priceMetric';
 
 export interface CollectionStats {
   floorPrice: PriceMetric | null;
-  topFloor: PriceMetric | null;
+  topOffer: PriceMetric | null;
   totalVolume: PriceMetric | null;
   /**
      * @minimum 0

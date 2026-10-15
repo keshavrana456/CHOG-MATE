@@ -436,10 +436,10 @@ components:
         updatedAt: { type: string, format: date-time }
     CollectionStats:
       type: object
-      required: [floorPrice, topFloor, totalVolume, totalHolders, updatedAt]
+      required: [floorPrice, topOffer, totalVolume, totalHolders, updatedAt]
       properties:
         floorPrice: { oneOf: [{ $ref: "#/components/schemas/PriceMetric" }, { type: "null" }] }
-        topFloor: { oneOf: [{ $ref: "#/components/schemas/PriceMetric" }, { type: "null" }] }
+        topOffer: { oneOf: [{ $ref: "#/components/schemas/PriceMetric" }, { type: "null" }] }
         totalVolume: { oneOf: [{ $ref: "#/components/schemas/PriceMetric" }, { type: "null" }] }
         totalHolders: { type: ["integer", "null"], minimum: 0 }
         updatedAt: { type: string, format: date-time }

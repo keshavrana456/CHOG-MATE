@@ -403,7 +403,7 @@ router.post("/matches/:matchId/messages", async (req, res): Promise<void> => {
 
       const { data: signed, error: signError } = await admin.storage
         .from(CHAT_MEDIA_BUCKET)
-        .createSignedUrls([attachment.attachmentPath], 600, {
+        .createSignedUrls([attachment.attachmentPath], 3600, {
           download: messageType === "file" ? attachment.attachmentName : false,
         });
       const uploadedObject = signed?.[0];
@@ -440,7 +440,20 @@ router.post("/matches/:matchId/messages", async (req, res): Promise<void> => {
       })
       .select("*")
       .single();
-    if (error || !message) throw new SocialDataError("Your message could not be sent.");
+    if (error || !message) {
+      if (attachmentPath) {
+        const { error: cleanupError } = await admin.storage
+          .from(CHAT_MEDIA_BUCKET)
+          .remove([attachmentPath]);
+        if (cleanupError) {
+          req.log.warn(
+            { errorType: cleanupError.name },
+            "Could not remove a chat attachment after message save failed",
+          );
+        }
+      }
+      throw new SocialDataError("Your message could not be sent.");
+    }
 
     const recipientId = match.user_a === session.userId ? match.user_b : match.user_a;
     const now = new Date().toISOString();
@@ -636,7 +649,7 @@ async function signMessageAttachments(
     if (!paths.length) continue;
     const { data, error } = await admin.storage
       .from(CHAT_MEDIA_BUCKET)
-      .createSignedUrls(paths, 600, {
+      .createSignedUrls(paths, 3600, {
         download: shouldDownload ? true : false,
       });
     if (error) {

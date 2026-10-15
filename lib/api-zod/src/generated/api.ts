@@ -133,7 +133,7 @@ export const GetCollectionStatsResponse = zod.object({
   "amount": zod.string(),
   "currency": zod.string()
 }),zod.null()]),
-  "topFloor": zod.union([zod.object({
+  "topOffer": zod.union([zod.object({
   "amount": zod.string(),
   "currency": zod.string()
 }),zod.null()]),
