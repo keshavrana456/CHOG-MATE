@@ -15,6 +15,10 @@ export interface Chog {
   /** @nullable */
   name?: string | null;
   /** @nullable */
+  description: string | null;
+  /** @nullable */
+  tier: string | null;
+  /** @nullable */
   imageUrl?: string | null;
   /** @nullable */
   metadataUrl?: string | null;

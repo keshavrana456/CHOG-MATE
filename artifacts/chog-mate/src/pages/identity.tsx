@@ -6,14 +6,14 @@ import { isAddress } from 'viem';
 import { useConnection, useDisconnect } from 'wagmi';
 import {
   getGetChogQueryKey, getGetMeQueryKey, getGetNftOwnershipQueryKey,
-  useGetChog, useGetMe, useGetNftOwnership, useLogoutWallet, useUpdateMeProfile,
+  useGetChog, useGetMe, useGetNftOwnership, useLogoutWallet, useSelectActiveChog, useUpdateMeProfile,
 } from '@workspace/api-client-react';
 import type { Profile, ProfileInput } from '@workspace/api-client-react';
 import { AppShell, ChogArtwork, EmptyState, Eyebrow, PageTitle, QueryState } from '@/components/shared';
 import { supabase } from '@/lib/supabase';
 
 export function MyChogPage() {
-  const me = useGetMe();
+  const me = useGetMe({ query: { queryKey: getGetMeQueryKey(), refetchOnWindowFocus: true } });
   const wallet = me.data?.walletAddress || '';
   const ownershipKey = getGetNftOwnershipQueryKey(wallet);
   const ownership = useGetNftOwnership(wallet, { query:{ enabled:!!wallet, queryKey:ownershipKey, refetchOnWindowFocus:true } });
@@ -27,34 +27,31 @@ export function MyChogPage() {
   const ownedCurrent = verifiedChogs.find(item=>item.tokenId===tokenId);
   const current = chog.data?.verified && chog.data.ownerWallet.toLowerCase()===wallet.toLowerCase() && verifiedChogs.some(item=>item.tokenId===chog.data?.tokenId) ? chog.data : ownedCurrent;
   const qc = useQueryClient();
-  const update = useUpdateMeProfile();
+  const selectActiveChog = useSelectActiveChog();
   const profile = me.data?.profile;
   const [notice, setNotice] = useState('');
   async function useAsProfileChog() {
     setNotice('');
-    if (!profile || !current || !verifiedChogs.some(item=>item.tokenId===current.tokenId)) return;
+    if (!me.data?.hasProfile || !current || !verifiedChogs.some(item=>item.tokenId===current.tokenId)) return;
+    if (current.tokenId === me.data.selectedChogTokenId) return;
     if (!window.confirm(`Use Chog #${current.tokenId} as your profile Chog?`)) return;
-    const input: ProfileInput = {
-      username:profile.username, displayName:profile.displayName, bio:profile.bio || undefined,
-      name:profile.name, gender:profile.gender, age:profile.age,
-      location:profile.location || undefined, timezone:profile.timezone || undefined,
-      interests:profile.interests, skills:profile.skills, lookingFor:profile.lookingFor,
-      selectedChogTokenId:current.tokenId,
-    };
     try {
-      await update.mutateAsync({data:input});
-      await qc.invalidateQueries({queryKey:getGetMeQueryKey()});
-      setNotice(`Chog #${current.tokenId} is now your selected profile Chog.`);
+      await selectActiveChog.mutateAsync({data:{tokenId:current.tokenId}});
+      await Promise.all([
+        qc.invalidateQueries({queryKey:getGetMeQueryKey()}),
+        qc.invalidateQueries({queryKey:ownershipKey}),
+      ]);
+      setNotice(`Chog #${current.tokenId} is now active. Your profile details were unchanged.`);
     } catch {
-      setNotice('Couldn’t save your selection. Please try again.');
+      setNotice('Couldn’t switch your active Chog. Ownership may have changed; refresh and try again.');
     }
   }
   return <AppShell displayName={profile?.displayName}><div className="page-enter">
-    <PageTitle eyebrow="Your verified collection" title="My Chogs." description="Every Chog you own, in one place." />
+    <PageTitle eyebrow="Your verified collection" title="My Chogs." description="Every Chog you own, in one place. Switch your active Chog without changing your profile details." />
     <QueryState loading={me.isLoading} error={me.isError} retry={()=>void me.refetch()}>
       {!me.data ? <EmptyState title="Connect your wallet first." detail="Your verified collection appears here after wallet sign-in."/> :
       <QueryState loading={ownership.isLoading} error={ownership.isError} retry={()=>void ownership.refetch()}>
-        {!verifiedChogs.length ? <EmptyState title="No verified Chog found." detail="We couldn’t verify a Chog Genesis NFT in this wallet. Connect the wallet that owns your Chog to continue." mark="cm"/> :
+        {!verifiedChogs.length ? <EmptyState title="No Chog Found" detail="A Chog NFT is required to create a CHOG MATE profile. Connect the wallet that owns a Chog NFT to continue." mark="cm"/> :
         <div className="space-y-6">
           <section className="surface rounded-[28px] p-5 sm:p-7">
             <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
@@ -80,10 +77,11 @@ export function MyChogPage() {
                     <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border border-white/70 bg-white/85 px-2 py-1 text-[9px] font-bold text-[#447a43] shadow-sm backdrop-blur">
                       <BadgeCheck size={11}/> Verified
                     </span>
-                    {me.data.selectedChogTokenId===item.tokenId && <span className="absolute right-2 top-2 rounded-full bg-[#7047ff] px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white">Selected</span>}
+                    {me.data.selectedChogTokenId===item.tokenId && <span className="absolute right-2 top-2 rounded-full bg-[#7047ff] px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white">Active</span>}
                   </div>
                   <div className="p-3 sm:p-4">
                     <p className="display text-base font-extrabold text-[#24133f]">Chog #{item.tokenId}</p>
+                    {item.tier && <p className="mt-1 text-[10px] font-semibold text-[#715795]">Tier: {item.tier}</p>}
                     <div className="mt-2 flex min-h-7 flex-wrap gap-1">
                       {item.traits?.slice(0,2).map((trait,index)=><span key={`${trait.traitType}-${index}`} className="max-w-full truncate rounded-full bg-[#f4effb] px-2 py-1 text-[9px] font-semibold text-[#715795]">{trait.traitType}: {trait.traitValue}</span>)}
                       {!item.traits?.length && <span className="text-[10px] text-[#958a9b]">No trait data returned</span>}
@@ -103,6 +101,8 @@ export function MyChogPage() {
                 <Eyebrow>Selected NFT</Eyebrow>
                 <h2 id="selected-chog-details" className="display break-all text-[32px] font-extrabold tracking-[-.06em] text-[#24133f]" data-testid="text-token-id">Chog #{current.tokenId}</h2>
                 {current.name && <p className="mt-1 text-sm text-[#766a80]">{current.name}</p>}
+                {current.tier && <p className="mt-2 inline-flex rounded-full bg-[#f2ecff] px-3 py-1.5 text-xs font-bold text-[#6246b0]" data-testid="text-chog-tier">Tier: {current.tier}</p>}
+                {current.description && <p className="mt-3 max-w-xl text-sm leading-6 text-[#766a80]" data-testid="text-chog-description">{current.description}</p>}
                 <div className="mt-5 space-y-2.5 text-xs text-[#80748b]">
                   <div className="flex items-start gap-2"><Wallet size={14} className="mt-0.5 shrink-0"/><span className="break-all" data-testid="text-owner-wallet">{current.ownerWallet}</span></div>
                   <div className="flex items-center gap-2"><ShieldCheck size={14}/><span>Contract: <span className="break-all">{current.contractAddress}</span></span></div>
@@ -113,11 +113,11 @@ export function MyChogPage() {
                   {current.traits?.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{current.traits.map((trait,index)=><div key={`${trait.traitType}-${index}`} className="flex items-start justify-between gap-3 rounded-2xl bg-[#faf6ef] px-3 py-2.5" data-testid={`trait-${index}`}><span className="text-[11px] font-medium text-[#887c91]">{trait.traitType}</span><span className="text-right text-[11px] font-bold text-[#453454]">{trait.traitValue}{typeof trait.rarity==='number' && <span className="mt-1 block text-[9px] font-medium text-[#9a8da0]">Rarity {trait.rarity}%</span>}</span></div>)}</div> : <p className="mt-3 rounded-2xl border border-dashed border-[#ded4c7] px-4 py-4 text-xs leading-5 text-[#897e8e]" data-testid="state-no-traits">No trait metadata was returned for this Chog. We won’t guess at what isn’t there.</p>}
                 </div>
                 {chog.isError && <p className="mt-4 text-xs text-[#aa4848]" data-testid="status-token-error">Token metadata could not be refreshed. The collection listing still comes from verified wallet ownership.</p>}
-                {!profile ? <Link href="/profile" className="button-primary mt-5 inline-flex rounded-full px-5 py-3 text-xs font-bold" data-testid="link-create-profile">Create your profile</Link> :
-                  <button type="button" onClick={()=>void useAsProfileChog()} disabled={update.isPending || me.data.selectedChogTokenId===current.tokenId} className="button-primary mt-5 rounded-full px-5 py-3 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-55" data-testid="button-use-profile-chog">
-                    {me.data.selectedChogTokenId===current.tokenId?'Selected Chog':'Use as profile Chog'}
+                {!me.data.hasProfile ? <Link href={`/profile?chog=${encodeURIComponent(current.tokenId)}`} className="button-primary mt-5 inline-flex rounded-full px-5 py-3 text-xs font-bold" data-testid="link-create-profile">Create your profile</Link> :
+                  <button type="button" onClick={()=>void useAsProfileChog()} disabled={selectActiveChog.isPending || me.data.selectedChogTokenId===current.tokenId} className="button-primary mt-5 rounded-full px-5 py-3 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-55" data-testid="button-use-profile-chog">
+                    {me.data.selectedChogTokenId===current.tokenId?'Active Chog':selectActiveChog.isPending?'Switching…':'Make active Chog'}
                   </button>}
-                {update.isPending && <p className="mt-2 text-xs text-[#7047ff]" role="status">Saving your selected Chog…</p>}
+                {selectActiveChog.isPending && <p className="mt-2 text-xs text-[#7047ff]" role="status">Revalidating ownership and switching your Chog…</p>}
                 {notice && <p className={`mt-3 rounded-xl px-3 py-2 text-xs ${notice.startsWith('Chog #')?'bg-[#eef8ea] text-[#447a43]':'bg-[#fff2ec] text-[#914c3c]'}`} role="status">{notice}</p>}
               </div>
             </div>
@@ -155,7 +155,7 @@ function ProfilePreview({profile}:{profile:Profile}) {
 }
 
 export function ProfilePage() {
-  const me = useGetMe();
+  const me = useGetMe({ query: { queryKey: getGetMeQueryKey(), refetchOnWindowFocus: true } });
   const profile = me.data?.profile;
   const [username,setUsername] = useState('');
   const [displayName,setDisplayName] = useState('');
@@ -173,33 +173,59 @@ export function ProfilePage() {
   const [profileVisible,setProfileVisible] = useState<boolean | null>(null);
   const [initialized,setInitialized] = useState(false);
   useEffect(()=>{
-    if(profile && !initialized) {
+    if(!me.data || initialized) return;
+    if(profile) {
       setUsername(profile.username); setDisplayName(profile.displayName); setName(profile.name||''); setGender(profile.gender||''); setAge(profile.age ? String(profile.age) : ''); setBio(profile.bio||'');
       setLocation(profile.location||''); setTimezone(profile.timezone||''); setInterests(joinTags(profile.interests));
       setSkills(joinTags(profile.skills)); setLookingFor(joinTags(profile.lookingFor));
-      setSelectedChogTokenId(me.data?.selectedChogTokenId || profile.chog.tokenId);
-       setProfileVisible(me.data?.profileVisible ?? true);
-      setInitialized(true);
+      setSelectedChogTokenId(me.data.selectedChogTokenId || profile.chog.tokenId);
+      setProfileVisible(me.data.profileVisible ?? true);
+    } else {
+      const requestedTokenId = new URLSearchParams(window.location.search).get('chog');
+      const requestedChog = me.data.chogs.find(chog=>chog.verified && chog.tokenId===requestedTokenId);
+      setSelectedChogTokenId(requestedChog?.tokenId || '');
+      setProfileVisible(true);
     }
-  },[profile,me.data?.selectedChogTokenId,initialized]);
+    setInitialized(true);
+  },[profile,me.data,initialized]);
   const update = useUpdateMeProfile();
+  const selectActiveChog = useSelectActiveChog();
   const qc = useQueryClient();
   async function save(event: FormEvent) {
     event.preventDefault(); setNotice('');
     if (!lookingFor.trim()) { setNotice('Add at least one connection type to continue.'); return; }
-    if (!selectedChogTokenId) { setNotice('Choose a verified Chog to show on your profile.'); return; }
+    const tokenIdForSave = profile
+      ? me.data?.selectedChogTokenId || profile.chog.tokenId
+      : selectedChogTokenId;
+    if (!tokenIdForSave) { setNotice('Choose a verified Chog to show on your profile.'); return; }
     const isDating = tags(lookingFor).some(value=>/date|romantic/i.test(value));
     const numericAge = age.trim() ? Number(age) : null;
     if (isDating && numericAge !== null && (!Number.isInteger(numericAge) || numericAge < 18 || numericAge > 120)) { setNotice('Dating profiles must use an age between 18 and 120.'); return; }
-    const data: ProfileInput = { username:username.trim(),displayName:displayName.trim(),name:name.trim()||null,gender:gender.trim()||null,age:isDating?numericAge:null,bio:bio||undefined,location:location||undefined,timezone:timezone||undefined,interests:tags(interests),skills:tags(skills),lookingFor:tags(lookingFor),selectedChogTokenId,...(profileVisible===null?{}:{profileVisible}) };
+    const data: ProfileInput = { username:username.trim(),displayName:displayName.trim(),name:name.trim()||null,gender:gender.trim()||null,age:isDating?numericAge:null,bio:bio||undefined,location:location||undefined,timezone:timezone||undefined,interests:tags(interests),skills:tags(skills),lookingFor:tags(lookingFor),selectedChogTokenId:tokenIdForSave,...(profileVisible===null?{}:{profileVisible}) };
     try { await update.mutateAsync({data}); await qc.invalidateQueries({queryKey:getGetMeQueryKey()}); setNotice('Profile saved. Your story, your way.'); }
     catch { setNotice('Your profile couldn’t be saved. Check the fields and try again.'); }
+  }
+  async function switchActiveChog() {
+    setNotice('');
+    const chosen = me.data?.chogs.find(chog=>chog.verified && chog.tokenId===selectedChogTokenId);
+    if (!profile || !chosen || chosen.tokenId===me.data?.selectedChogTokenId) return;
+    try {
+      await selectActiveChog.mutateAsync({data:{tokenId:chosen.tokenId}});
+      await Promise.all([
+        qc.invalidateQueries({queryKey:getGetMeQueryKey()}),
+        qc.invalidateQueries({queryKey:getGetNftOwnershipQueryKey(me.data.walletAddress)}),
+      ]);
+      setNotice(`Chog #${chosen.tokenId} is now active. Your profile details were unchanged.`);
+    } catch {
+      setNotice('Couldn’t switch your active Chog. Ownership may have changed; refresh and try again.');
+    }
   }
   return <AppShell displayName={profile?.displayName}><div className="page-enter">
     <PageTitle eyebrow="Tell them a little more" title="Your profile." description="Your Chog proves you’re part of the community. The rest is yours to shape." action={<div className="flex flex-wrap gap-2"><a href="#edit-profile" className="button-primary inline-flex items-center rounded-full px-4 py-2.5 text-xs font-bold" data-testid="link-edit-profile">Edit profile</a><Link href="/my-chog" className="button-soft inline-flex items-center rounded-full px-4 py-2.5 text-xs font-bold" data-testid="link-profile-my-chog">My Chogs</Link><Link href="/settings" className="button-soft inline-flex items-center rounded-full px-4 py-2.5 text-xs font-bold" data-testid="link-profile-settings">Settings</Link></div>} />
     <QueryState loading={me.isLoading} error={me.isError} retry={()=>void me.refetch()}>
       {!me.data ? <EmptyState title="Connect to create your profile." detail="Sign in with the wallet holding your Chog Genesis NFT to get started."/> :
-      (!me.data.hasChog || !me.data.chogs.some(chog=>chog.verified)) ? <EmptyState title="Your Chog is your invitation." detail="We couldn’t verify a Chog Genesis NFT for this wallet, so profile discovery isn’t available yet."/> :
+       (!me.data.hasChog || !me.data.chogs.some(chog=>chog.verified)) ? <EmptyState title="No Chog Found" detail="A Chog NFT is required to create a CHOG MATE profile. Connect the wallet that owns a Chog NFT to continue."/> :
+       (me.data.hasProfile && !profile) ? <EmptyState title="Choose an active Chog." detail="Your previous active Chog is no longer in this wallet. Choose another verified Chog to restore your profile; your saved details will stay unchanged." action={<Link href="/my-chog" className="button-primary inline-flex rounded-full px-5 py-3 text-xs font-bold" data-testid="link-restore-active-chog">Choose a Chog</Link>}/> :
        <div className="space-y-5">
        {profile && <ProfilePreview profile={profile}/>}
        <form id="edit-profile" onSubmit={save} className="grid scroll-mt-24 gap-6 lg:grid-cols-[1fr_330px]">
@@ -221,8 +247,9 @@ export function ProfilePage() {
           <div className="mt-6 flex flex-col-reverse justify-between gap-4 border-t border-[#24133f10] pt-5 sm:flex-row sm:items-center"><p className="text-xs text-[#908498]">Your wallet, verified ownership, and token ID can’t be edited.</p><button type="submit" disabled={update.isPending} className="button-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-bold disabled:opacity-50" data-testid="button-save-profile"><Save size={16}/>{update.isPending?'Saving…':'Save profile'}</button></div>
         </section>
         <aside className="surface h-fit rounded-[28px] p-6">
-          <Eyebrow>Verified Chogs</Eyebrow><h2 className="display text-2xl font-extrabold text-[#24133f]">Show this one.</h2>
-          <div className="mt-5 grid grid-cols-2 gap-3">{me.data.chogs.filter(chog=>chog.verified).map(chog=><button type="button" onClick={()=>setSelectedChogTokenId(chog.tokenId)} key={chog.tokenId} className={`overflow-hidden rounded-2xl border-2 text-left transition ${selectedChogTokenId===chog.tokenId?'border-[#8a63ff] shadow-[0_0_0_3px_#8a63ff1c]':'border-transparent'}`} data-testid={`button-select-chog-${chog.tokenId}`}><div className="aspect-square"><ChogArtwork chog={chog}/></div><div className="bg-white px-3 py-2 text-xs font-bold text-[#51445f]">#{chog.tokenId}{selectedChogTokenId===chog.tokenId && <Check className="float-right text-[#7047ff]" size={14}/>}</div></button>)}</div>
+           <Eyebrow>Verified Chogs</Eyebrow><h2 className="display text-2xl font-extrabold text-[#24133f]">{profile?'Choose your active Chog.':'Choose your Chog.'}</h2>
+           <div className="mt-5 grid grid-cols-2 gap-3">{me.data.chogs.filter(chog=>chog.verified).map(chog=><button type="button" onClick={()=>setSelectedChogTokenId(chog.tokenId)} key={chog.tokenId} className={`overflow-hidden rounded-2xl border-2 text-left transition ${selectedChogTokenId===chog.tokenId?'border-[#8a63ff] shadow-[0_0_0_3px_#8a63ff1c]':'border-transparent'}`} data-testid={`button-select-chog-${chog.tokenId}`}><div className="relative aspect-square"><ChogArtwork chog={chog}/>{me.data.selectedChogTokenId===chog.tokenId && <span className="absolute right-2 top-2 rounded-full bg-[#7047ff] px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white">Active</span>}</div><div className="bg-white px-3 py-2 text-xs font-bold text-[#51445f]">#{chog.tokenId}{chog.tier && <span className="mt-1 block text-[10px] font-medium text-[#715795]">Tier: {chog.tier}</span>}{selectedChogTokenId===chog.tokenId && <Check className="float-right text-[#7047ff]" size={14}/>}</div></button>)}</div>
+           {profile ? <div className="mt-5 border-t border-[#24133f10] pt-5"><p className="text-xs leading-5 text-[#82778c]">Switching changes only your active Chog identity. Your name, username, bio, preferences, and other profile details stay the same.</p><button type="button" onClick={()=>void switchActiveChog()} disabled={selectActiveChog.isPending || !selectedChogTokenId || selectedChogTokenId===me.data.selectedChogTokenId} className="button-primary mt-4 w-full rounded-full px-5 py-3 text-xs font-bold disabled:opacity-50" data-testid="button-set-active-chog">{selectActiveChog.isPending?'Revalidating ownership…':selectedChogTokenId===me.data.selectedChogTokenId?'Active Chog':'Make active Chog'}</button></div> : <p className="mt-4 text-[11px] leading-5 text-[#998ea0]">Your selected Chog will become your active identity when you save your profile.</p>}
           <div className="mt-6 border-t border-[#24133f10] pt-5"><p className="mb-3 flex items-center gap-2 text-sm font-bold text-[#51445f]"><Eye size={15}/> Profile discoverability</p><div className="grid grid-cols-2 gap-2"><button type="button" onClick={()=>setProfileVisible(true)} aria-pressed={profileVisible===true} className={`rounded-xl border px-3 py-2.5 text-xs font-bold ${profileVisible===true?'border-[#8a63ff] bg-[#f2ecff] text-[#6246b0]':'border-[#e9e0d3] bg-white text-[#7c7185]'}`} data-testid="button-profile-show">Show profile</button><button type="button" onClick={()=>setProfileVisible(false)} aria-pressed={profileVisible===false} className={`rounded-xl border px-3 py-2.5 text-xs font-bold ${profileVisible===false?'border-[#8a63ff] bg-[#f2ecff] text-[#6246b0]':'border-[#e9e0d3] bg-white text-[#7c7185]'}`} data-testid="button-profile-hide">Hide from discovery</button></div><p className="mt-3 text-[11px] leading-5 text-[#998ea0]">{profileVisible===null?'Current visibility is not returned by the profile service. Choose an option to update it.':'Visibility is saved with your profile when you choose Save profile.'}</p></div>
         </aside>
        </form>

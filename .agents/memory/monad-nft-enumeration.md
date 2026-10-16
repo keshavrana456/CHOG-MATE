@@ -7,4 +7,4 @@ The CHOG Genesis collection exposes `tokensOfOwner(address)` for current holder 
 
 **Why:** Monad RPC `eth_getLogs` is capped at 100-block ranges, and the contract's owner-list method does not enumerate the whole collection. Treating `totalSupply` as sequential IDs can silently omit or invent items.
 
-**How to apply:** Use `tokensOfOwner` for wallet holdings, compare its count with `balanceOf`, and verify each item with `ownerOf`. Use the NFT indexer's cursor for collection pages and fail clearly when it is unavailable.
+**How to apply:** Use `tokensOfOwner` for wallet holdings, compare its count with `balanceOf`, and verify each item with `ownerOf`. Use the NFT indexer's cursor for collection pages and fail clearly when it is unavailable. For no-holder probes, use a valid nonzero wallet; this contract reverts on `balanceOf(0x0)`.

@@ -192,6 +192,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Profile"
+  /me/chog:
+    patch:
+      operationId: selectActiveChog
+      tags: [profiles]
+      summary: Set the active Chog without changing profile details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChogSelectionInput"
+      responses:
+        "204":
+          description: Active Chog changed
+        "400":
+          description: Invalid token ID
+        "401":
+          description: Wallet session required
+        "403":
+          description: Token is not currently owned by this wallet
+        "409":
+          description: Create a profile before setting an active Chog
+        "503":
+          description: Ownership check or profile storage is unavailable
   /discover:
     get:
       operationId: discoverProfiles
@@ -504,10 +528,11 @@ components:
           items: { type: string }
     CurrentProfile:
       type: object
-      required: [walletAddress, hasChog, chogs, profileVisible]
+      required: [walletAddress, hasChog, hasProfile, chogs, profileVisible]
       properties:
         walletAddress: { type: string }
         hasChog: { type: boolean }
+        hasProfile: { type: boolean }
         chogs:
           type: array
           items: { $ref: "#/components/schemas/Chog" }
@@ -541,6 +566,11 @@ components:
           items: { type: string, maxLength: 50 }
         selectedChogTokenId: { type: string }
         profileVisible: { type: boolean, default: true }
+    ChogSelectionInput:
+      type: object
+      required: [tokenId]
+      properties:
+        tokenId: { type: string, minLength: 1, maxLength: 78, pattern: "^[0-9]+$" }
     DiscoveryPage:
       type: object
       required: [profiles, nextCursor]

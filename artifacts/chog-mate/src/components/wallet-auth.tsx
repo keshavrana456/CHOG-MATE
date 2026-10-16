@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, BadgeCheck, ExternalLink, RefreshCw } from "lucide-react";
 import {
   getGetMeQueryKey,
+  getGetNftOwnershipQueryKey,
   useCreateAuthChallenge,
+  useGetNftOwnership,
   useVerifyWallet,
 } from "@workspace/api-client-react";
 import {
@@ -17,6 +19,7 @@ import { useLocation } from "wouter";
 import { appKit, monadNetwork } from "@/lib/appkit";
 import { walletAuthConfigured } from "@/lib/config";
 import { supabase } from "@/lib/supabase";
+import { ChogArtwork } from "@/components/shared";
 
 export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boolean }) {
   const [busy, setBusy] = useState(false);
@@ -36,6 +39,26 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
   const address = connection.address;
   const isConnected = connection.isConnected;
   const isWrongNetwork = isConnected && connection.chainId !== monadNetwork.id;
+  const ownership = useGetNftOwnership(address ?? "", {
+    query: {
+      enabled: Boolean(address && isConnected && !isWrongNetwork),
+      queryKey: getGetNftOwnershipQueryKey(address ?? ""),
+      refetchOnWindowFocus: true,
+      retry: 1,
+      staleTime: 30_000,
+    },
+  });
+  const ownershipMatchesWallet =
+    Boolean(address) &&
+    ownership.data?.walletAddress.toLowerCase() === address?.toLowerCase();
+  const ownedChogs =
+    ownershipMatchesWallet && ownership.data?.verified
+      ? ownership.data.chogs.filter(
+          (chog) =>
+            chog.verified &&
+            chog.ownerWallet.toLowerCase() === address?.toLowerCase(),
+        )
+      : [];
   const isConnecting =
     connection.isConnecting ||
     connection.isReconnecting ||
@@ -208,6 +231,117 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
             {isSwitchPending ? "Switching…" : "Switch to Monad"}
           </button>
         </div>
+      )}
+      {isConnected && !isWrongNetwork && (
+        <section
+          className="surface mt-4 w-full max-w-xl rounded-[24px] p-4 sm:p-5"
+          aria-label="Connected wallet Chog ownership"
+          data-testid="panel-wallet-chog-ownership"
+        >
+          {ownership.isLoading || (!ownershipMatchesWallet && !ownership.isError) ? (
+            <p className="flex items-center gap-2 text-sm font-semibold text-[#715795]" role="status">
+              <RefreshCw size={15} className="animate-spin" />
+              Checking Chog ownership for this wallet…
+            </p>
+          ) : ownership.isError ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="display text-lg font-extrabold text-[#24133f]">Ownership check unavailable</h2>
+                <p className="mt-1 text-xs leading-5 text-[#82778c]">
+                  We couldn’t verify this wallet on Monad. No ownership result has been assumed.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void ownership.refetch()}
+                disabled={ownership.isFetching}
+                className="button-soft inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full px-4 text-xs font-bold disabled:opacity-60"
+                data-testid="button-retry-chog-ownership"
+              >
+                <RefreshCw size={13} className={ownership.isFetching ? "animate-spin" : ""} />
+                Try again
+              </button>
+            </div>
+          ) : ownedChogs.length === 0 ? (
+            <div>
+              <h2 className="display text-xl font-extrabold text-[#24133f]" data-testid="heading-no-chog-found">
+                No Chog Found
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-[#82778c]" data-testid="text-no-chog-profile-requirement">
+                A Chog NFT is required to create a CHOG MATE profile. Connect a wallet that owns a Chog NFT to continue.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div className="mb-4 flex items-center gap-2">
+                <BadgeCheck size={16} className="text-[#447a43]" />
+                <div>
+                  <h2 className="display text-lg font-extrabold text-[#24133f]">
+                    {ownedChogs.length} Chog{ownedChogs.length === 1 ? "" : "s"} found
+                  </h2>
+                  <p className="text-xs text-[#82778c]">Verified against Monad for this wallet.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {ownedChogs.map((chog) => (
+                  <article
+                    key={chog.tokenId}
+                    className="overflow-hidden rounded-2xl border border-[#eee7f2] bg-white"
+                    data-testid={`card-connected-chog-${chog.tokenId}`}
+                  >
+                    <div className="aspect-square bg-[#f4eddf]">
+                      <ChogArtwork chog={chog} />
+                    </div>
+                    <div className="p-3">
+                      <p className="display text-sm font-extrabold text-[#24133f]">
+                        Chog #{chog.tokenId}
+                      </p>
+                      {chog.name && (
+                        <p className="mt-1 truncate text-[10px] text-[#766a80]">{chog.name}</p>
+                      )}
+                      {chog.tier && (
+                        <p className="mt-1 text-[10px] font-semibold text-[#715795]">
+                          Tier: {chog.tier}
+                        </p>
+                      )}
+                      {chog.description && (
+                        <p className="mt-1 line-clamp-3 text-[10px] leading-4 text-[#82778c]">
+                          {chog.description}
+                        </p>
+                      )}
+                      {chog.traits?.length ? (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {chog.traits.map((trait, index) => (
+                            <span
+                              key={`${trait.traitType}-${index}`}
+                              className="max-w-full truncate rounded-full bg-[#f4effb] px-2 py-1 text-[9px] font-semibold text-[#715795]"
+                            >
+                              {trait.traitType}: {trait.traitValue}
+                              {typeof trait.rarity === "number" && ` · ${trait.rarity}%`}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-[10px] text-[#958a9b]">No trait data returned</p>
+                      )}
+                      {chog.metadataUrl && (
+                        <a
+                          href={chog.metadataUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-[#7047ff]"
+                          data-testid={`link-connected-chog-metadata-${chog.tokenId}`}
+                        >
+                          Metadata <ExternalLink size={11} />
+                        </a>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
       )}
       {feedback && (
         <p

@@ -93,6 +93,8 @@ export const GetNftOwnershipResponse = zod.object({
   "ownerWallet": zod.string(),
   "verified": zod.boolean(),
   "name": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "tier": zod.string().nullable(),
   "imageUrl": zod.string().url().nullish(),
   "metadataUrl": zod.string().url().nullish(),
   "traits": zod.array(zod.object({
@@ -173,6 +175,8 @@ export const GetChogResponse = zod.object({
   "ownerWallet": zod.string(),
   "verified": zod.boolean(),
   "name": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "tier": zod.string().nullable(),
   "imageUrl": zod.string().url().nullish(),
   "metadataUrl": zod.string().url().nullish(),
   "traits": zod.array(zod.object({
@@ -203,12 +207,15 @@ export const getMeResponseProfileOneCompatibilityMax = 100;
 export const GetMeResponse = zod.object({
   "walletAddress": zod.string(),
   "hasChog": zod.boolean(),
+  "hasProfile": zod.boolean(),
   "chogs": zod.array(zod.object({
   "tokenId": zod.string(),
   "contractAddress": zod.string(),
   "ownerWallet": zod.string(),
   "verified": zod.boolean(),
   "name": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "tier": zod.string().nullable(),
   "imageUrl": zod.string().url().nullish(),
   "metadataUrl": zod.string().url().nullish(),
   "traits": zod.array(zod.object({
@@ -239,6 +246,8 @@ export const GetMeResponse = zod.object({
   "ownerWallet": zod.string(),
   "verified": zod.boolean(),
   "name": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "tier": zod.string().nullable(),
   "imageUrl": zod.string().url().nullish(),
   "metadataUrl": zod.string().url().nullish(),
   "traits": zod.array(zod.object({
@@ -337,6 +346,8 @@ export const UpdateMeProfileResponse = zod.object({
   "ownerWallet": zod.string(),
   "verified": zod.boolean(),
   "name": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "tier": zod.string().nullable(),
   "imageUrl": zod.string().url().nullish(),
   "metadataUrl": zod.string().url().nullish(),
   "traits": zod.array(zod.object({
@@ -348,6 +359,22 @@ export const UpdateMeProfileResponse = zod.object({
   "compatibility": zod.number().int().min(updateMeProfileResponseCompatibilityMin).max(updateMeProfileResponseCompatibilityMax).nullish(),
   "whyYouMatch": zod.array(zod.string()).optional()
 })
+
+
+/**
+ * @summary Set the active Chog without changing profile details
+ */
+export const selectActiveChogBodyTokenIdMax = 78;
+
+
+export const selectActiveChogBodyTokenIdRegExp = new RegExp('^[0-9]+$');
+
+
+export const SelectActiveChogBody = zod.object({
+  "tokenId": zod.string().min(1).max(selectActiveChogBodyTokenIdMax).regex(selectActiveChogBodyTokenIdRegExp)
+})
+
+export const SelectActiveChogResponse = zod.void()
 
 
 /**
@@ -396,6 +423,8 @@ export const DiscoverProfilesResponse = zod.object({
   "ownerWallet": zod.string(),
   "verified": zod.boolean(),
   "name": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "tier": zod.string().nullable(),
   "imageUrl": zod.string().url().nullish(),
   "metadataUrl": zod.string().url().nullish(),
   "traits": zod.array(zod.object({
@@ -460,6 +489,8 @@ export const SwipeProfileResponse = zod.object({
   "ownerWallet": zod.string(),
   "verified": zod.boolean(),
   "name": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "tier": zod.string().nullable(),
   "imageUrl": zod.string().url().nullish(),
   "metadataUrl": zod.string().url().nullish(),
   "traits": zod.array(zod.object({
@@ -520,6 +551,8 @@ export const GetMatchesResponseItem = zod.object({
   "ownerWallet": zod.string(),
   "verified": zod.boolean(),
   "name": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "tier": zod.string().nullable(),
   "imageUrl": zod.string().url().nullish(),
   "metadataUrl": zod.string().url().nullish(),
   "traits": zod.array(zod.object({

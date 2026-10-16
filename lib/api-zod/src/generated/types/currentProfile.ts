@@ -11,6 +11,7 @@ import type { Profile } from './profile';
 export interface CurrentProfile {
   walletAddress: string;
   hasChog: boolean;
+  hasProfile: boolean;
   chogs: Chog[];
   /** @nullable */
   selectedChogTokenId?: string | null;

@@ -59,6 +59,10 @@ export interface Chog {
   /** @nullable */
   name?: string | null;
   /** @nullable */
+  description: string | null;
+  /** @nullable */
+  tier: string | null;
+  /** @nullable */
   imageUrl?: string | null;
   /** @nullable */
   metadataUrl?: string | null;
@@ -143,6 +147,7 @@ export interface Profile {
 export interface CurrentProfile {
   walletAddress: string;
   hasChog: boolean;
+  hasProfile: boolean;
   chogs: Chog[];
   /** @nullable */
   selectedChogTokenId?: string | null;
@@ -212,6 +217,15 @@ export interface ProfileInput {
   lookingFor: string[];
   selectedChogTokenId: string;
   profileVisible?: boolean;
+}
+
+export interface ChogSelectionInput {
+  /**
+     * @minLength 1
+     * @maxLength 78
+     * @pattern ^[0-9]+$
+     */
+  tokenId: string;
 }
 
 export interface DiscoveryPage {

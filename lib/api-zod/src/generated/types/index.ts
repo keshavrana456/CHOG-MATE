@@ -9,6 +9,7 @@
 export * from './authChallenge';
 export * from './blockInput';
 export * from './chog';
+export * from './chogSelectionInput';
 export * from './collectionStats';
 export * from './currentProfile';
 export * from './discoverProfilesMode';

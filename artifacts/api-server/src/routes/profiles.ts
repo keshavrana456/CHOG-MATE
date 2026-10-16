@@ -3,6 +3,7 @@ import {
   DiscoverProfilesQueryParams,
   DiscoverProfilesResponse,
   GetMeResponse,
+  SelectActiveChogBody,
   UpdateMeProfileBody,
   UpdateMeProfileResponse,
 } from "@workspace/api-zod";
@@ -28,6 +29,15 @@ router.get("/me", async (req, res): Promise<void> => {
   try {
     const chogs = await getOwnedChogs(getAddress(session.walletAddress));
     await syncVerifiedChogs(session.userId, session.walletAddress, chogs);
+    const admin = getSupabaseAdmin();
+    const { data: storedProfile, error: storedProfileError } = await admin
+      .from("profiles")
+      .select("profile_visible")
+      .eq("user_id", session.userId)
+      .maybeSingle();
+    if (storedProfileError) {
+      throw new SocialDataError("CHOG MATE database setup is incomplete.");
+    }
     const bundle = await loadProfileBundle(session.userId);
     const selected = bundle
       ? chogs.find((chog) => chog.tokenId === bundle.chog.tokenId) ?? null
@@ -43,9 +53,10 @@ router.get("/me", async (req, res): Promise<void> => {
       GetMeResponse.parse({
         walletAddress: session.walletAddress,
         hasChog: chogs.length > 0,
+        hasProfile: Boolean(storedProfile),
         chogs,
         selectedChogTokenId: selected?.tokenId ?? null,
-        profileVisible: bundle?.profile.profile_visible ?? null,
+        profileVisible: storedProfile?.profile_visible ?? null,
         profile,
       }),
     );
@@ -65,8 +76,19 @@ router.put("/me/profile", async (req, res): Promise<void> => {
 
   try {
     const chogs = await getOwnedChogs(getAddress(session.walletAddress));
+    const admin = getSupabaseAdmin();
+    const { data: existingProfile, error: existingProfileError } = await admin
+      .from("profiles")
+      .select("selected_chog_token_id")
+      .eq("user_id", session.userId)
+      .maybeSingle();
+    if (existingProfileError) {
+      throw new SocialDataError("CHOG MATE database setup is incomplete.");
+    }
+    const activeTokenId =
+      existingProfile?.selected_chog_token_id ?? parsed.data.selectedChogTokenId;
     const selectedChog = chogs.find(
-      (chog) => chog.tokenId === parsed.data.selectedChogTokenId,
+      (chog) => chog.tokenId === activeTokenId,
     );
     if (!selectedChog) {
       res.status(403).json({
@@ -74,8 +96,23 @@ router.put("/me/profile", async (req, res): Promise<void> => {
       });
       return;
     }
+    const ownsSelectedChog = await isCurrentChogOwner(
+      getAddress(session.walletAddress),
+      selectedChog.tokenId,
+    );
+    if (ownsSelectedChog === null) {
+      res.status(503).json({
+        error: "Chog ownership could not be revalidated. Please try again.",
+      });
+      return;
+    }
+    if (!ownsSelectedChog) {
+      res.status(403).json({
+        error: "Choose a Chog Genesis NFT currently held by this wallet.",
+      });
+      return;
+    }
     await syncVerifiedChogs(session.userId, session.walletAddress, chogs);
-    const admin = getSupabaseAdmin();
     const now = new Date().toISOString();
     const { error: profileError } = await admin.from("profiles").upsert(
       {
@@ -124,6 +161,67 @@ router.put("/me/profile", async (req, res): Promise<void> => {
     const bundle = await loadProfileBundle(session.userId, selectedChog.tokenId);
     if (!bundle) throw new SocialDataError("Your verified Chog could not be loaded.");
     res.json(UpdateMeProfileResponse.parse(profileToApi(bundle, null, [], true)));
+  } catch (error) {
+    sendProfileError(req, res, error);
+  }
+});
+
+router.patch("/me/chog", async (req, res): Promise<void> => {
+  const session = requireWalletSession(req, res);
+  if (!session) return;
+
+  const parsed = SelectActiveChogBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Choose a valid Chog token ID." });
+    return;
+  }
+
+  const tokenNumber = BigInt(parsed.data.tokenId);
+  if (tokenNumber > (1n << 256n) - 1n) {
+    res.status(400).json({ error: "Choose a valid Chog token ID." });
+    return;
+  }
+  const tokenId = tokenNumber.toString();
+
+  try {
+    const walletAddress = getAddress(session.walletAddress);
+    const ownsSelectedChog = await isCurrentChogOwner(
+      walletAddress,
+      tokenId,
+    );
+    if (ownsSelectedChog === null) {
+      res.status(503).json({
+        error: "Chog ownership could not be revalidated. Please try again.",
+      });
+      return;
+    }
+    if (!ownsSelectedChog) {
+      res.status(403).json({
+        error: "Choose a Chog Genesis NFT currently held by this wallet.",
+      });
+      return;
+    }
+
+    const { data: updatedProfile, error } = await getSupabaseAdmin()
+      .from("profiles")
+      .update({
+        selected_chog_token_id: tokenId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", session.userId)
+      .select("user_id")
+      .maybeSingle();
+    if (error) {
+      throw new SocialDataError("CHOG MATE database setup is incomplete.");
+    }
+    if (!updatedProfile) {
+      res.status(409).json({
+        error: "Create your profile before switching your active Chog.",
+      });
+      return;
+    }
+
+    res.sendStatus(204);
   } catch (error) {
     sendProfileError(req, res, error);
   }
