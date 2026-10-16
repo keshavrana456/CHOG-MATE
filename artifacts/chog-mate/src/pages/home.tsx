@@ -23,7 +23,7 @@ import { AppShell, Eyebrow } from '@/components/shared';
 
 const WalletAuthPanel = lazy(() => import('@/components/wallet-auth'));
 const chogGif = 'https://media1.tenor.com/m/O3waRaZ2i4AAAAAC/chog-monad.gif';
-const secondaryChogGif = 'https://media1.tenor.com/m/ZsVXpYhoKiQAAAAd/waweonline-wawe.gif';
+const secondaryChogGif = `${import.meta.env.BASE_URL}chog-blind-transparent.gif`;
 const secondaryChogGifPage = 'https://tenor.com/view/waweonline-wawe-monad-chog-gmonad-gif-7405421530750396964';
 
 export default function HomePage() {
@@ -110,18 +110,12 @@ export default function HomePage() {
               A community for verified Chog holders
             </div>
             <h1
-              className="display text-[53px] font-extrabold leading-[.96] tracking-[-.065em] text-[#24133f] sm:text-[75px] lg:text-[88px]"
+              className="home-main-heading display text-[53px] font-extrabold leading-[.96] tracking-[-.065em] sm:text-[75px] lg:text-[88px]"
               data-testid="heading-home"
             >
               MEET YOUR
               <br />
-              <span className="relative inline-block text-[#7047ff]">
-                CHOG MATE
-                <span className="absolute -right-7 top-1 text-[#b07bff]">
-                  <Sparkles size={22} />
-                </span>
-              </span>
-              .
+              <span>CHOG MATE</span>.
             </h1>
             <div className="mt-7 flex items-center gap-3">
               <span className="h-px w-10 bg-[#a78aef]" />
@@ -310,14 +304,14 @@ export default function HomePage() {
                     className="home-sale-card surface group overflow-hidden rounded-[24px] transition duration-200 hover:-translate-y-1"
                     data-testid={`card-live-sale-${sale.tokenId}`}
                   >
-                    <div className="relative aspect-[1.28] overflow-hidden bg-[#f3ecdf]">
+                    <div className="home-sale-art relative aspect-[1.28] overflow-hidden">
                       {sale.imageUrl ? (
                         <img
                           src={sale.imageUrl}
                           alt={`Chog #${sale.tokenId}`}
                           loading="lazy"
                           decoding="async"
-                          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]"
+                          className="home-sale-image transition duration-500"
                         />
                       ) : (
                         <div className="grid h-full place-items-center text-[#8e8097]">
@@ -482,7 +476,7 @@ export default function HomePage() {
             >
               <img
                 src={secondaryChogGif}
-                alt="Animated Chog by Waweonline"
+                  alt="Animated Chog by Waweonline with a transparent background"
                 loading="eager"
                 decoding="async"
               />

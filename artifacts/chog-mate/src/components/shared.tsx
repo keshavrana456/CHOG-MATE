@@ -8,11 +8,11 @@ export function Brand({ inverse = false }: { inverse?: boolean }) {
     <img
       src="https://media1.tenor.com/m/I4kaCEPTjMUAAAAd/chog-monad.gif"
       alt="Chog waving hello"
-      width={40}
-      height={40}
+      width={48}
+      height={48}
       className="brand-mark"
     />
-    <span className={`display text-[19px] font-extrabold tracking-[-.07em] ${inverse ? 'text-[#fff4de]' : 'text-[#24133f]'}`}>CHOG MATE</span>
+    <span className={`display text-[22px] font-extrabold tracking-[-.07em] ${inverse ? 'text-[#fff4de]' : 'text-[#24133f]'}`}>CHOG MATE</span>
   </Link>;
 }
 
