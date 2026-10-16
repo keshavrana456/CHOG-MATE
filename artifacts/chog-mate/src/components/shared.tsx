@@ -61,7 +61,7 @@ export function AppShell({ children, displayName }: { children: ReactNode; displ
       </div>
     </header>
     <main className="relative z-[1] mx-auto w-full max-w-[1440px] px-5 pb-28 pt-7 md:px-9 md:pb-12 md:pt-10">{children}</main>
-    <nav className="mobile-tabbar fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 md:hidden" aria-label="Mobile navigation">
+    <nav className={`mobile-tabbar fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 md:hidden ${headerHidden ? 'is-hidden' : ''}`} aria-label="Mobile navigation">
       {mobileLinks.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} className={`mobile-tab flex flex-col items-center gap-1 rounded-xl py-1.5 text-[9px] font-semibold ${path === href ? 'active' : ''}`} data-testid={`mobile-nav-${label.toLowerCase().replace(' ', '-')}`}><Icon size={18} strokeWidth={2} />{label === 'My Profile' ? 'Profile' : label}</Link>)}
     </nav>
   </div>;
