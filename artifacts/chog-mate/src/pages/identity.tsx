@@ -30,21 +30,31 @@ export function MyChogPage() {
   const selectActiveChog = useSelectActiveChog();
   const profile = me.data?.profile;
   const [notice, setNotice] = useState('');
-  async function useAsProfileChog() {
+  async function useAsProfileChog(tokenId: string) {
     setNotice('');
-    if (!me.data?.hasProfile || !current || !verifiedChogs.some(item=>item.tokenId===current.tokenId)) return;
-    if (current.tokenId === me.data.selectedChogTokenId) return;
-    if (!window.confirm(`Use Chog #${current.tokenId} as your profile Chog?`)) return;
+    if (!me.data?.hasProfile || !verifiedChogs.some(item=>item.tokenId===tokenId)) return;
+    setSelected(tokenId);
+    if (tokenId === me.data.selectedChogTokenId) return;
     try {
-      await selectActiveChog.mutateAsync({data:{tokenId:current.tokenId}});
+      await selectActiveChog.mutateAsync({data:{tokenId}});
       await Promise.all([
         qc.invalidateQueries({queryKey:getGetMeQueryKey()}),
         qc.invalidateQueries({queryKey:ownershipKey}),
       ]);
-      setNotice(`Chog #${current.tokenId} is now active. Your profile details were unchanged.`);
+      setNotice(`Chog #${tokenId} is now active. Your profile details were unchanged.`);
     } catch {
+      setSelected(me.data.selectedChogTokenId || '');
       setNotice('Couldn’t switch your active Chog. Ownership may have changed; refresh and try again.');
     }
+  }
+  function chooseChog(tokenId: string) {
+    if (selectActiveChog.isPending) return;
+    if (me.data?.hasProfile) {
+      void useAsProfileChog(tokenId);
+      return;
+    }
+    setSelected(tokenId);
+    setNotice('');
   }
   return <AppShell displayName={profile?.displayName}><div className="page-enter">
     <PageTitle eyebrow="Your verified collection" title="My Chogs." description="Every Chog you own, in one place. Switch your active Chog without changing your profile details." />
@@ -67,7 +77,8 @@ export function MyChogPage() {
                 return <button
                   type="button"
                   key={item.tokenId}
-                  onClick={()=>setSelected(item.tokenId)}
+                  onClick={()=>chooseChog(item.tokenId)}
+                  disabled={selectActiveChog.isPending}
                   aria-pressed={isSelected}
                   className={`group overflow-hidden rounded-[20px] border-2 bg-white text-left transition hover:-translate-y-0.5 ${isSelected?'border-[#8a63ff] shadow-[0_0_0_3px_#8a63ff1c]':'border-transparent hover:border-[#dacbf3]'}`}
                   data-testid={`card-owned-chog-${item.tokenId}`}
@@ -86,7 +97,15 @@ export function MyChogPage() {
                       {item.traits?.slice(0,2).map((trait,index)=><span key={`${trait.traitType}-${index}`} className="max-w-full truncate rounded-full bg-[#f4effb] px-2 py-1 text-[9px] font-semibold text-[#715795]">{trait.traitType}: {trait.traitValue}</span>)}
                       {!item.traits?.length && <span className="text-[10px] text-[#958a9b]">No trait data returned</span>}
                     </div>
-                    <span className="mt-3 block text-[10px] font-bold text-[#7047ff]">View details</span>
+                    <span className="mt-3 block text-[10px] font-bold text-[#7047ff]">
+                      {me.data.hasProfile
+                        ? me.data.selectedChogTokenId===item.tokenId
+                          ? 'Active identity · View details'
+                          : selectActiveChog.isPending && selected===item.tokenId
+                            ? 'Switching identity…'
+                            : 'Select as active identity'
+                        : 'Choose for your profile'}
+                    </span>
                   </div>
                 </button>;
               })}
@@ -113,10 +132,14 @@ export function MyChogPage() {
                   {current.traits?.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{current.traits.map((trait,index)=><div key={`${trait.traitType}-${index}`} className="flex items-start justify-between gap-3 rounded-2xl bg-[#faf6ef] px-3 py-2.5" data-testid={`trait-${index}`}><span className="text-[11px] font-medium text-[#887c91]">{trait.traitType}</span><span className="text-right text-[11px] font-bold text-[#453454]">{trait.traitValue}{typeof trait.rarity==='number' && <span className="mt-1 block text-[9px] font-medium text-[#9a8da0]">Rarity {trait.rarity}%</span>}</span></div>)}</div> : <p className="mt-3 rounded-2xl border border-dashed border-[#ded4c7] px-4 py-4 text-xs leading-5 text-[#897e8e]" data-testid="state-no-traits">No trait metadata was returned for this Chog. We won’t guess at what isn’t there.</p>}
                 </div>
                 {chog.isError && <p className="mt-4 text-xs text-[#aa4848]" data-testid="status-token-error">Token metadata could not be refreshed. The collection listing still comes from verified wallet ownership.</p>}
-                {!me.data.hasProfile ? <Link href={`/profile?chog=${encodeURIComponent(current.tokenId)}`} className="button-primary mt-5 inline-flex rounded-full px-5 py-3 text-xs font-bold" data-testid="link-create-profile">Create your profile</Link> :
-                  <button type="button" onClick={()=>void useAsProfileChog()} disabled={selectActiveChog.isPending || me.data.selectedChogTokenId===current.tokenId} className="button-primary mt-5 rounded-full px-5 py-3 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-55" data-testid="button-use-profile-chog">
-                    {me.data.selectedChogTokenId===current.tokenId?'Active Chog':selectActiveChog.isPending?'Switching…':'Make active Chog'}
-                  </button>}
+                {!me.data.hasProfile ? <Link href={`/profile?chog=${encodeURIComponent(current.tokenId)}`} className="button-primary mt-5 inline-flex rounded-full px-5 py-3 text-xs font-bold" data-testid="link-create-profile">Create your profile with Chog #{current.tokenId}</Link> :
+                  <p className="mt-5 text-xs font-semibold text-[#447a43]" role="status" data-testid="status-active-chog">
+                    {me.data.selectedChogTokenId===current.tokenId
+                      ? `Chog #${current.tokenId} is your active identity.`
+                      : selectActiveChog.isPending
+                        ? `Switching to Chog #${current.tokenId}…`
+                        : 'Select a Chog above to make it your active identity.'}
+                  </p>}
                 {selectActiveChog.isPending && <p className="mt-2 text-xs text-[#7047ff]" role="status">Revalidating ownership and switching your Chog…</p>}
                 {notice && <p className={`mt-3 rounded-xl px-3 py-2 text-xs ${notice.startsWith('Chog #')?'bg-[#eef8ea] text-[#447a43]':'bg-[#fff2ec] text-[#914c3c]'}`} role="status">{notice}</p>}
               </div>
@@ -147,7 +170,9 @@ function ProfilePreview({profile}:{profile:Profile}) {
           {profile.timezone && <p><span className="font-bold text-[#51445f]">Timezone</span> · {profile.timezone}</p>}
         </div>
         {profile.interests.length>0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b8fa0]">Interests</p><div className="mt-2 flex flex-wrap gap-2">{profile.interests.map(value=><span key={value} className="rounded-full bg-[#f2ecff] px-3 py-1.5 text-[11px] font-semibold text-[#6246b0]">{value}</span>)}</div></div>}
+        {profile.hobbies.length>0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b8fa0]">Hobbies</p><div className="mt-2 flex flex-wrap gap-2">{profile.hobbies.map(value=><span key={value} className="rounded-full bg-[#f2ecff] px-3 py-1.5 text-[11px] font-semibold text-[#6246b0]">{value}</span>)}</div></div>}
         {profile.skills.length>0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b8fa0]">Skills</p><div className="mt-2 flex flex-wrap gap-2">{profile.skills.map(value=><span key={value} className="rounded-full border border-[#e9e1d7] px-3 py-1 text-[11px] text-[#7c7185]">{value}</span>)}</div></div>}
+        {profile.languages.length>0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b8fa0]">Languages</p><div className="mt-2 flex flex-wrap gap-2">{profile.languages.map(value=><span key={value} className="rounded-full border border-[#e9e1d7] px-3 py-1 text-[11px] text-[#7c7185]">{value}</span>)}</div></div>}
         <div className="mt-5"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b8fa0]">Looking for</p><div className="mt-2 flex flex-wrap gap-2">{profile.lookingFor.map(value=><span key={value} className="rounded-full bg-[#fff6e9] px-3 py-1.5 text-[11px] font-semibold text-[#9b6b3c]">{value}</span>)}</div></div>
       </div>
     </div>
@@ -166,7 +191,9 @@ export function ProfilePage() {
   const [location,setLocation] = useState('');
   const [timezone,setTimezone] = useState('');
   const [interests,setInterests] = useState('');
+  const [hobbies,setHobbies] = useState('');
   const [skills,setSkills] = useState('');
+  const [languages,setLanguages] = useState('');
   const [lookingFor,setLookingFor] = useState('');
   const [selectedChogTokenId,setSelectedChogTokenId] = useState('');
   const [notice,setNotice] = useState('');
@@ -177,7 +204,8 @@ export function ProfilePage() {
     if(profile) {
       setUsername(profile.username); setDisplayName(profile.displayName); setName(profile.name||''); setGender(profile.gender||''); setAge(profile.age ? String(profile.age) : ''); setBio(profile.bio||'');
       setLocation(profile.location||''); setTimezone(profile.timezone||''); setInterests(joinTags(profile.interests));
-      setSkills(joinTags(profile.skills)); setLookingFor(joinTags(profile.lookingFor));
+      setHobbies(joinTags(profile.hobbies)); setSkills(joinTags(profile.skills));
+      setLanguages(joinTags(profile.languages)); setLookingFor(joinTags(profile.lookingFor));
       setSelectedChogTokenId(me.data.selectedChogTokenId || profile.chog.tokenId);
       setProfileVisible(me.data.profileVisible ?? true);
     } else {
@@ -201,19 +229,20 @@ export function ProfilePage() {
     const isDating = tags(lookingFor).some(value=>/date|romantic/i.test(value));
     const numericAge = age.trim() ? Number(age) : null;
     if (isDating && numericAge !== null && (!Number.isInteger(numericAge) || numericAge < 18 || numericAge > 120)) { setNotice('Dating profiles must use an age between 18 and 120.'); return; }
-    const data: ProfileInput = { username:username.trim(),displayName:displayName.trim(),name:name.trim()||null,gender:gender.trim()||null,age:isDating?numericAge:null,bio:bio||undefined,location:location||undefined,timezone:timezone||undefined,interests:tags(interests),skills:tags(skills),lookingFor:tags(lookingFor),selectedChogTokenId:tokenIdForSave,...(profileVisible===null?{}:{profileVisible}) };
+    const data: ProfileInput = { username:username.trim(),displayName:displayName.trim(),name:name.trim()||null,gender:gender.trim()||null,age:isDating?numericAge:null,bio:bio||undefined,location:location||undefined,timezone:timezone||undefined,interests:tags(interests),hobbies:tags(hobbies),skills:tags(skills),languages:tags(languages),lookingFor:tags(lookingFor),selectedChogTokenId:tokenIdForSave,...(profileVisible===null?{}:{profileVisible}) };
     try { await update.mutateAsync({data}); await qc.invalidateQueries({queryKey:getGetMeQueryKey()}); setNotice('Profile saved. Your story, your way.'); }
     catch { setNotice('Your profile couldn’t be saved. Check the fields and try again.'); }
   }
   async function switchActiveChog() {
     setNotice('');
+    const walletAddress = me.data?.walletAddress;
     const chosen = me.data?.chogs.find(chog=>chog.verified && chog.tokenId===selectedChogTokenId);
-    if (!profile || !chosen || chosen.tokenId===me.data?.selectedChogTokenId) return;
+    if (!profile || !walletAddress || !chosen || chosen.tokenId===me.data?.selectedChogTokenId) return;
     try {
       await selectActiveChog.mutateAsync({data:{tokenId:chosen.tokenId}});
       await Promise.all([
         qc.invalidateQueries({queryKey:getGetMeQueryKey()}),
-        qc.invalidateQueries({queryKey:getGetNftOwnershipQueryKey(me.data.walletAddress)}),
+        qc.invalidateQueries({queryKey:getGetNftOwnershipQueryKey(walletAddress)}),
       ]);
       setNotice(`Chog #${chosen.tokenId} is now active. Your profile details were unchanged.`);
     } catch {
@@ -240,7 +269,9 @@ export function ProfilePage() {
             <Field label="Location" value={location} onChange={setLocation} placeholder="City, region" testId="input-location"/>
             <Field label="Timezone" value={timezone} onChange={setTimezone} placeholder="e.g. UTC−5" testId="input-timezone"/>
             <TagField label="Interests" value={interests} onChange={setInterests} placeholder="Art, climbing, long reads" testId="input-interests"/>
+             <TagField label="Hobbies" value={hobbies} onChange={setHobbies} placeholder="Hiking, cooking, photography" testId="input-hobbies"/>
             <TagField label="Skills" value={skills} onChange={setSkills} placeholder="Design, writing, Solidity" testId="input-skills"/>
+             <TagField label="Languages" value={languages} onChange={setLanguages} placeholder="English, Hindi, Spanish" testId="input-languages"/>
             <TagField label="What are you looking for?" value={lookingFor} onChange={setLookingFor} placeholder="Dates, friends, collaborators" testId="input-looking-for"/>
           </div>
           {notice && <p className={`mt-5 rounded-2xl px-4 py-3 text-sm ${notice.startsWith('Profile saved')?'bg-[#eef8ea] text-[#447a43]':'bg-[#fff2ec] text-[#914c3c]'}`} role="status" data-testid="status-profile-save">{notice}</p>}
@@ -303,7 +334,7 @@ export function SettingsPage() {
     if (!profile || !currentMe || !(currentMe.selectedChogTokenId || profile.chog.tokenId)) { setMessage('Create your profile and choose a Chog before changing discovery visibility.'); return; }
     if (visible===null) { setMessage('Choose whether your profile should appear in discovery.'); return; }
     try {
-      await update.mutateAsync({data:{username:profile.username,displayName:profile.displayName,bio:profile.bio||undefined,location:profile.location||undefined,timezone:profile.timezone||undefined,interests:profile.interests,skills:profile.skills,lookingFor:profile.lookingFor,selectedChogTokenId:currentMe.selectedChogTokenId || profile.chog.tokenId,profileVisible:visible}});
+      await update.mutateAsync({data:{username:profile.username,displayName:profile.displayName,name:profile.name,gender:profile.gender,age:profile.age,bio:profile.bio||undefined,location:profile.location||undefined,timezone:profile.timezone||undefined,interests:profile.interests,hobbies:profile.hobbies,skills:profile.skills,languages:profile.languages,lookingFor:profile.lookingFor,selectedChogTokenId:currentMe.selectedChogTokenId || profile.chog.tokenId,profileVisible:visible}});
       await qc.invalidateQueries({queryKey:getGetMeQueryKey()}); setMessage('Discovery visibility updated.');
     } catch {setMessage('We couldn’t update visibility. Please try again.');}
   }

@@ -238,7 +238,9 @@ export const GetMeResponse = zod.object({
   "location": zod.string().nullish(),
   "timezone": zod.string().nullish(),
   "interests": zod.array(zod.string()),
+  "hobbies": zod.array(zod.string()),
   "skills": zod.array(zod.string()),
+  "languages": zod.array(zod.string()),
   "lookingFor": zod.array(zod.string()),
   "chog": zod.object({
   "tokenId": zod.string(),
@@ -289,9 +291,17 @@ export const updateMeProfileBodyInterestsItemMax = 50;
 
 export const updateMeProfileBodyInterestsMax = 20;
 
+export const updateMeProfileBodyHobbiesItemMax = 50;
+
+export const updateMeProfileBodyHobbiesMax = 20;
+
 export const updateMeProfileBodySkillsItemMax = 50;
 
 export const updateMeProfileBodySkillsMax = 20;
+
+export const updateMeProfileBodyLanguagesItemMax = 50;
+
+export const updateMeProfileBodyLanguagesMax = 20;
 
 export const updateMeProfileBodyLookingForItemMax = 50;
 
@@ -309,7 +319,9 @@ export const UpdateMeProfileBody = zod.object({
   "location": zod.string().max(updateMeProfileBodyLocationMax).nullish(),
   "timezone": zod.string().max(updateMeProfileBodyTimezoneMax).nullish(),
   "interests": zod.array(zod.string().max(updateMeProfileBodyInterestsItemMax)).max(updateMeProfileBodyInterestsMax),
+  "hobbies": zod.array(zod.string().max(updateMeProfileBodyHobbiesItemMax)).max(updateMeProfileBodyHobbiesMax),
   "skills": zod.array(zod.string().max(updateMeProfileBodySkillsItemMax)).max(updateMeProfileBodySkillsMax),
+  "languages": zod.array(zod.string().max(updateMeProfileBodyLanguagesItemMax)).max(updateMeProfileBodyLanguagesMax),
   "lookingFor": zod.array(zod.string().max(updateMeProfileBodyLookingForItemMax)).min(1).max(updateMeProfileBodyLookingForMax),
   "selectedChogTokenId": zod.string(),
   "profileVisible": zod.boolean().default(updateMeProfileBodyProfileVisibleDefault)
@@ -338,7 +350,9 @@ export const UpdateMeProfileResponse = zod.object({
   "location": zod.string().nullish(),
   "timezone": zod.string().nullish(),
   "interests": zod.array(zod.string()),
+  "hobbies": zod.array(zod.string()),
   "skills": zod.array(zod.string()),
+  "languages": zod.array(zod.string()),
   "lookingFor": zod.array(zod.string()),
   "chog": zod.object({
   "tokenId": zod.string(),
@@ -415,7 +429,9 @@ export const DiscoverProfilesResponse = zod.object({
   "location": zod.string().nullish(),
   "timezone": zod.string().nullish(),
   "interests": zod.array(zod.string()),
+  "hobbies": zod.array(zod.string()),
   "skills": zod.array(zod.string()),
+  "languages": zod.array(zod.string()),
   "lookingFor": zod.array(zod.string()),
   "chog": zod.object({
   "tokenId": zod.string(),
@@ -481,7 +497,9 @@ export const SwipeProfileResponse = zod.object({
   "location": zod.string().nullish(),
   "timezone": zod.string().nullish(),
   "interests": zod.array(zod.string()),
+  "hobbies": zod.array(zod.string()),
   "skills": zod.array(zod.string()),
+  "languages": zod.array(zod.string()),
   "lookingFor": zod.array(zod.string()),
   "chog": zod.object({
   "tokenId": zod.string(),
@@ -543,7 +561,9 @@ export const GetMatchesResponseItem = zod.object({
   "location": zod.string().nullish(),
   "timezone": zod.string().nullish(),
   "interests": zod.array(zod.string()),
+  "hobbies": zod.array(zod.string()),
   "skills": zod.array(zod.string()),
+  "languages": zod.array(zod.string()),
   "lookingFor": zod.array(zod.string()),
   "chog": zod.object({
   "tokenId": zod.string(),

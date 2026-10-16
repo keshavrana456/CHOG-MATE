@@ -29,7 +29,9 @@ export interface Profile {
   /** @nullable */
   timezone?: string | null;
   interests: string[];
+  hobbies: string[];
   skills: string[];
+  languages: string[];
   lookingFor: string[];
   chog: Chog;
   /**

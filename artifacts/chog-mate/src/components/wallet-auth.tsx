@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, BadgeCheck, ExternalLink, RefreshCw } from "lucide-react";
 import {
+  getGetMeQueryOptions,
   getGetMeQueryKey,
   getGetNftOwnershipQueryKey,
+  getMe,
   useCreateAuthChallenge,
   useGetNftOwnership,
   useVerifyWallet,
@@ -160,7 +162,20 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
       });
       if (sessionError) throw sessionError;
       await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-      navigate(session.hasChog ? "/discover" : "/my-chog");
+      let destination = "/my-chog";
+      if (session.hasChog) {
+        try {
+          const current = await queryClient.fetchQuery({
+            ...getGetMeQueryOptions(),
+            queryFn: () => getMe(),
+            staleTime: 0,
+          });
+          if (current.hasProfile && current.profile) destination = "/discover";
+        } catch {
+          // If the profile lookup is unavailable, land on the ownership gallery.
+        }
+      }
+      navigate(destination);
     } catch (error) {
       const err = error as { code?: number; message?: string };
       setFeedback(

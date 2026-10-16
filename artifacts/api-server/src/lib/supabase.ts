@@ -1,5 +1,14 @@
 import { createHmac } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
+
+if (typeof globalThis.WebSocket === "undefined") {
+  Object.defineProperty(globalThis, "WebSocket", {
+    value: WebSocket,
+    configurable: true,
+    writable: true,
+  });
+}
 
 function requiredEnv(name: string): string {
   const value = process.env[name];

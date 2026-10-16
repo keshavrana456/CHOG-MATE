@@ -15,9 +15,11 @@ export interface DbProfile {
   timezone: string | null;
   looking_for: string[];
   interests: string[];
+  hobbies: string[];
   skills: string[];
+  languages: string[];
   profile_visible: boolean;
-  selected_chog_token_id: string | null;
+  active_chog_token_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +38,8 @@ export interface DbChog {
   token_id: string;
   image_url: string | null;
   metadata_url: string | null;
+  tier: string | null;
+  metadata: Record<string, unknown> | null;
   owner_wallet: string;
   verified: boolean;
 }
@@ -101,6 +105,8 @@ export async function syncVerifiedChogs(
         token_id: token.tokenId,
         image_url: token.imageUrl,
         metadata_url: token.metadataUrl,
+        tier: token.tier,
+        metadata: token.metadata,
         owner_wallet: wallet,
         verified: token.verified,
         updated_at: new Date().toISOString(),
@@ -155,7 +161,7 @@ export async function loadProfileBundle(
   if (profileError || userError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
   if (!profile || !user) return null;
 
-  const preferredId = selectedTokenId ?? profile.selected_chog_token_id;
+  const preferredId = selectedTokenId ?? profile.active_chog_token_id;
   let chogQuery = admin
     .from("chogs")
     .select("*")
@@ -228,7 +234,7 @@ export async function loadProfileBundles(
     const choices = chogMap.get(userId) ?? [];
     if (!profile || !user || !profile.profile_visible || choices.length === 0) continue;
     const chog =
-      choices.find((item) => item.token_id === profile.selected_chog_token_id) ?? choices[0];
+      choices.find((item) => item.token_id === profile.active_chog_token_id) ?? choices[0];
     results.set(userId, {
       profile,
       user,
@@ -256,7 +262,9 @@ export function profileToApi(
     location: bundle.profile.location,
     timezone: bundle.profile.timezone,
     interests: bundle.profile.interests ?? [],
+    hobbies: bundle.profile.hobbies ?? [],
     skills: bundle.profile.skills ?? [],
+    languages: bundle.profile.languages ?? [],
     lookingFor: bundle.profile.looking_for ?? [],
     chog: bundle.chog,
     compatibility,
@@ -277,11 +285,12 @@ export function mapDbChog(chog: DbChog, traits: DbTrait[]): ChogToken {
     verified: chog.verified,
     name: null,
     description: null,
-    tier:
+    tier: chog.tier ??
       mappedTraits.find((trait) => trait.traitType.trim().toLowerCase() === "tier")
         ?.traitValue ?? null,
     imageUrl: chog.image_url,
     metadataUrl: chog.metadata_url,
+    metadata: chog.metadata,
     traits: mappedTraits,
   };
 }

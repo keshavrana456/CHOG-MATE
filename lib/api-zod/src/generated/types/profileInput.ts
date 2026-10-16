@@ -58,7 +58,17 @@ export interface ProfileInput {
      * @maxItems 20
      * @items.maxLength 50
      */
+  hobbies: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 50
+     */
   skills: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 50
+     */
+  languages: string[];
   /**
      * @minItems 1
      * @maxItems 10

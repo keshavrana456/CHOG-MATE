@@ -1,1 +1,3 @@
 - [Monad NFT enumeration](monad-nft-enumeration.md) — use the collection’s owner-list method; Monad log scans are range-capped.
+- [Supabase project alignment](supabase-project-alignment.md) — verify the frontend URL and database/service credentials target the same project before migrations.
+- [Supabase under Node 20](supabase-node20-websocket.md) — install a global WebSocket implementation before creating Supabase clients in this runtime.

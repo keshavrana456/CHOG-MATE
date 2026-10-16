@@ -109,10 +109,11 @@ export interface ChogToken {
   tier: string | null;
   imageUrl: string | null;
   metadataUrl: string | null;
+  metadata: Metadata | null;
   traits: ChogTrait[];
 }
 
-interface Metadata {
+interface Metadata extends Record<string, unknown> {
   name?: unknown;
   description?: unknown;
   tier?: unknown;
@@ -202,6 +203,7 @@ export async function getChog(tokenId: string): Promise<ChogToken | null> {
     tier: metadataTier(metadata, traits),
     imageUrl: metadataImage(metadata),
     metadataUrl,
+    metadata,
     traits,
   };
 }
@@ -268,6 +270,7 @@ async function loadOwnedChogs(walletAddress: Address): Promise<ChogToken[]> {
         tier: metadataTier(metadata, traits),
         imageUrl: metadataImage(metadata),
         metadataUrl,
+        metadata,
         traits,
       };
     }),
@@ -296,7 +299,11 @@ async function readTokenMetadata(uri: string | null): Promise<Metadata | null> {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(12_000) });
     if (!response.ok) throw new Error(`Metadata request failed (${response.status})`);
-    const metadata = (await response.json()) as Metadata;
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error("NFT metadata must be a JSON object.");
+    }
+    const metadata = payload as Metadata;
     metadataCache.set(uri, { value: metadata, expiresAt: Date.now() + METADATA_TTL_MS });
     return metadata;
   } catch {

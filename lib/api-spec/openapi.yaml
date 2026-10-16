@@ -500,7 +500,7 @@ components:
         rarity: { type: ["number", "null"], minimum: 0, maximum: 100 }
     Profile:
       type: object
-      required: [userId, username, displayName, name, gender, age, walletAddress, chog, interests, skills, lookingFor]
+      required: [userId, username, displayName, name, gender, age, walletAddress, chog, interests, hobbies, skills, languages, lookingFor]
       properties:
         userId: { type: string, format: uuid }
         username: { type: string }
@@ -515,7 +515,13 @@ components:
         interests:
           type: array
           items: { type: string }
+        hobbies:
+          type: array
+          items: { type: string }
         skills:
+          type: array
+          items: { type: string }
+        languages:
           type: array
           items: { type: string }
         lookingFor:
@@ -541,7 +547,7 @@ components:
         profile: { oneOf: [{ $ref: "#/components/schemas/Profile" }, { type: "null" }] }
     ProfileInput:
       type: object
-      required: [username, displayName, interests, skills, lookingFor, selectedChogTokenId]
+      required: [username, displayName, interests, hobbies, skills, languages, lookingFor, selectedChogTokenId]
       properties:
         username: { type: string, minLength: 2, maxLength: 24, pattern: "^[a-zA-Z0-9_]+$" }
         displayName: { type: string, minLength: 1, maxLength: 48 }
@@ -555,7 +561,15 @@ components:
           type: array
           maxItems: 20
           items: { type: string, maxLength: 50 }
+        hobbies:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 50 }
         skills:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 50 }
+        languages:
           type: array
           maxItems: 20
           items: { type: string, maxLength: 50 }

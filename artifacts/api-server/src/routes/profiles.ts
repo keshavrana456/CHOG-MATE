@@ -79,14 +79,14 @@ router.put("/me/profile", async (req, res): Promise<void> => {
     const admin = getSupabaseAdmin();
     const { data: existingProfile, error: existingProfileError } = await admin
       .from("profiles")
-      .select("selected_chog_token_id")
+      .select("active_chog_token_id")
       .eq("user_id", session.userId)
       .maybeSingle();
     if (existingProfileError) {
       throw new SocialDataError("CHOG MATE database setup is incomplete.");
     }
     const activeTokenId =
-      existingProfile?.selected_chog_token_id ?? parsed.data.selectedChogTokenId;
+      existingProfile?.active_chog_token_id ?? parsed.data.selectedChogTokenId;
     const selectedChog = chogs.find(
       (chog) => chog.tokenId === activeTokenId,
     );
@@ -126,9 +126,11 @@ router.put("/me/profile", async (req, res): Promise<void> => {
         location: parsed.data.location ?? null,
         timezone: parsed.data.timezone ?? null,
         interests: parsed.data.interests,
+        hobbies: parsed.data.hobbies,
         skills: parsed.data.skills,
+        languages: parsed.data.languages,
         looking_for: parsed.data.lookingFor,
-        selected_chog_token_id: selectedChog.tokenId,
+        active_chog_token_id: selectedChog.tokenId,
         profile_visible: parsed.data.profileVisible ?? true,
         updated_at: now,
       },
@@ -205,7 +207,7 @@ router.patch("/me/chog", async (req, res): Promise<void> => {
     const { data: updatedProfile, error } = await getSupabaseAdmin()
       .from("profiles")
       .update({
-        selected_chog_token_id: tokenId,
+        active_chog_token_id: tokenId,
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", session.userId)
