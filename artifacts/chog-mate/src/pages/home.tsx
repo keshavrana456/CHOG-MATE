@@ -194,6 +194,74 @@ export default function HomePage() {
 
         <section
           className="home-section mx-auto max-w-[1240px] border-t border-[#ded4c6] py-12 sm:py-16"
+          aria-labelledby="stats-heading"
+        >
+          <div className="mb-7">
+            <Eyebrow>Chog Genesis, at a glance</Eyebrow>
+            <h2
+              id="stats-heading"
+              className="display text-[31px] font-extrabold leading-tight text-[#24133f] sm:text-[40px]"
+            >
+              Collection statistics.
+            </h2>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              label="Floor price"
+              value={
+                stats.data
+                  ? stats.data.floorPrice
+                    ? `${formatAmount(stats.data.floorPrice.amount)} ${stats.data.floorPrice.currency}`
+                    : 'No active listings'
+                  : 'Unavailable'
+              }
+              loading={stats.isLoading}
+              error={stats.isError}
+            />
+            <StatCard
+              label="Top offer"
+              value={
+                stats.data
+                  ? stats.data.topOffer
+                    ? `${formatAmount(stats.data.topOffer.amount)} ${stats.data.topOffer.currency}`
+                    : 'No active offers'
+                  : 'Unavailable'
+              }
+              loading={stats.isLoading}
+              error={stats.isError}
+              detail="Best active collection offer on OpenSea."
+            />
+            <StatCard
+              label="Total volume"
+              value={
+                stats.data?.totalVolume
+                  ? `${formatAmount(stats.data.totalVolume.amount)} ${stats.data.totalVolume.currency}`
+                  : 'Unavailable'
+              }
+              loading={stats.isLoading}
+              error={stats.isError}
+              detail="ETH volume converted to MON using a live exchange rate."
+            />
+            <StatCard
+              label="Total holders"
+              value={
+                stats.data?.totalHolders != null
+                  ? stats.data.totalHolders.toLocaleString()
+                  : 'Unavailable'
+              }
+              loading={stats.isLoading}
+              error={stats.isError}
+            />
+          </div>
+          {stats.data && (
+            <p className="mt-4 text-right text-[10px] text-[#968a9b]">
+              Data updated {formatTimeAgo(stats.data.updatedAt)}
+            </p>
+          )}
+        </section>
+
+        <section
+          className="home-section mx-auto max-w-[1240px] border-t border-[#ded4c6] py-12 sm:py-16"
           aria-labelledby="sales-heading"
         >
           <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -352,74 +420,6 @@ export default function HomePage() {
                 Feed updated {formatTimeAgo(sales.data?.pages[0]?.updatedAt ?? '')}
               </p>
             </>
-          )}
-        </section>
-
-        <section
-          className="home-section mx-auto max-w-[1240px] border-t border-[#ded4c6] py-12 sm:py-16"
-          aria-labelledby="stats-heading"
-        >
-          <div className="mb-7">
-            <Eyebrow>Chog Genesis, at a glance</Eyebrow>
-            <h2
-              id="stats-heading"
-              className="display text-[31px] font-extrabold leading-tight text-[#24133f] sm:text-[40px]"
-            >
-              Collection statistics.
-            </h2>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              label="Floor price"
-              value={
-                stats.data
-                  ? stats.data.floorPrice
-                    ? `${formatAmount(stats.data.floorPrice.amount)} ${stats.data.floorPrice.currency}`
-                    : 'No active listings'
-                  : 'Unavailable'
-              }
-              loading={stats.isLoading}
-              error={stats.isError}
-            />
-            <StatCard
-              label="Top offer"
-              value={
-                stats.data
-                  ? stats.data.topOffer
-                    ? `${formatAmount(stats.data.topOffer.amount)} ${stats.data.topOffer.currency}`
-                    : 'No active offers'
-                  : 'Unavailable'
-              }
-              loading={stats.isLoading}
-              error={stats.isError}
-              detail="Best active collection offer on OpenSea."
-            />
-            <StatCard
-              label="Total volume"
-              value={
-                stats.data?.totalVolume
-                  ? `${formatAmount(stats.data.totalVolume.amount)} ${stats.data.totalVolume.currency}`
-                  : 'Unavailable'
-              }
-              loading={stats.isLoading}
-              error={stats.isError}
-              detail="ETH volume converted to MON using a live exchange rate."
-            />
-            <StatCard
-              label="Total holders"
-              value={
-                stats.data?.totalHolders != null
-                  ? stats.data.totalHolders.toLocaleString()
-                  : 'Unavailable'
-              }
-              loading={stats.isLoading}
-              error={stats.isError}
-            />
-          </div>
-          {stats.data && (
-            <p className="mt-4 text-right text-[10px] text-[#968a9b]">
-              Data updated {formatTimeAgo(stats.data.updatedAt)}
-            </p>
           )}
         </section>
 
