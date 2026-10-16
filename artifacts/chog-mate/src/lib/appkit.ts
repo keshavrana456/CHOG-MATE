@@ -1,30 +1,43 @@
 import { createAppKit } from "@reown/appkit/react";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { defineChain } from "viem";
+import { createConfig, http, injected } from "wagmi";
+import { appConfig } from "@/lib/config";
 
 export const monadNetwork = defineChain({
   id: 143,
   name: "Monad",
   nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://rpc.monad.xyz"] },
+    default: { http: [appConfig.monadRpcUrl] },
   },
   blockExplorers: {
     default: { name: "Monad Explorer", url: "https://monadscan.com" },
   },
 });
 
-export const walletConnectConfigured = Boolean(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID);
-const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
-export const appKit = projectId
+const projectId = appConfig.walletConnectProjectId;
+export const wagmiAdapter = projectId
+  ? new WagmiAdapter({
+      projectId,
+      networks: [monadNetwork],
+    })
+  : null;
+
+const injectedWagmiConfig = createConfig({
+  chains: [monadNetwork],
+  connectors: [injected()],
+  transports: {
+    [monadNetwork.id]: http(appConfig.monadRpcUrl),
+  },
+});
+
+export const wagmiConfig = wagmiAdapter?.wagmiConfig ?? injectedWagmiConfig;
+
+export const appKit = wagmiAdapter
   ? createAppKit({
-    adapters: [
-      new WagmiAdapter({
-        projectId,
-        networks: [monadNetwork],
-      }),
-    ],
-    projectId,
+    adapters: [wagmiAdapter],
+    projectId: projectId!,
     networks: [monadNetwork],
     metadata: {
       name: "CHOG MATE",

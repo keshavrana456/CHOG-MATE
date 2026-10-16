@@ -1,17 +1,24 @@
 import {
   createPublicClient,
   defineChain,
+  getAddress,
   http,
+  isAddress,
   type Address,
 } from "viem";
 
-export const CHOG_CONTRACT_ADDRESS = (
-  process.env.VITE_CHOG_CONTRACT_ADDRESS ??
-  "0xc96d31f8626c6d03fae5dcd3d61e3fb9f4a73763"
+const DEFAULT_CHOG_CONTRACT_ADDRESS =
+  "0xc96d31f8626c6d03fae5dcd3d61e3fb9f4a73763";
+const configuredContractAddress = process.env.VITE_CHOG_CONTRACT_ADDRESS?.trim();
+if (configuredContractAddress && !isAddress(configuredContractAddress)) {
+  throw new Error("VITE_CHOG_CONTRACT_ADDRESS must be a valid EVM address.");
+}
+export const CHOG_CONTRACT_ADDRESS = getAddress(
+  configuredContractAddress || DEFAULT_CHOG_CONTRACT_ADDRESS,
 ) as Address;
 
 function resolveMonadRpcUrl(): string {
-  const configured = process.env.MONAD_RPC_URL;
+  const configured = process.env.MONAD_RPC_URL ?? process.env.VITE_MONAD_RPC_URL;
   if (!configured) return "https://rpc.monad.xyz";
 
   const assignment = configured.trim().match(/^(?:VITE_)?MONAD_RPC_URL\s*=\s*(.*)$/i);
@@ -20,10 +27,10 @@ function resolveMonadRpcUrl(): string {
   try {
     url = new URL(value);
   } catch {
-    throw new Error("MONAD_RPC_URL must be a valid HTTP or HTTPS URL.");
+    throw new Error("MONAD_RPC_URL or VITE_MONAD_RPC_URL must be a valid HTTP or HTTPS URL.");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("MONAD_RPC_URL must be a valid HTTP or HTTPS URL.");
+    throw new Error("MONAD_RPC_URL or VITE_MONAD_RPC_URL must be a valid HTTP or HTTPS URL.");
   }
   return url.toString();
 }
@@ -98,6 +105,8 @@ export interface ChogToken {
   ownerWallet: string;
   verified: boolean;
   name: string | null;
+  description: string | null;
+  tier: string | null;
   imageUrl: string | null;
   metadataUrl: string | null;
   traits: ChogTrait[];
@@ -105,6 +114,8 @@ export interface ChogToken {
 
 interface Metadata {
   name?: unknown;
+  description?: unknown;
+  tier?: unknown;
   image?: unknown;
   image_url?: unknown;
   attributes?: unknown;
@@ -178,16 +189,20 @@ export async function getChog(tokenId: string): Promise<ChogToken | null> {
     .catch(() => null);
   if (!owner) return null;
 
-  const metadata = await readTokenMetadata(tokenNumber);
+  const metadataUrl = await tokenMetadataUrl(tokenNumber);
+  const metadata = await readTokenMetadata(metadataUrl);
+  const traits = mapTraits(metadata);
   return {
     tokenId: tokenNumber.toString(),
     contractAddress: CHOG_CONTRACT_ADDRESS,
     ownerWallet: owner,
     verified: true,
     name: typeof metadata?.name === "string" ? metadata.name : null,
+    description: metadataText(metadata?.description, 2_000),
+    tier: metadataTier(metadata, traits),
     imageUrl: metadataImage(metadata),
-    metadataUrl: await tokenMetadataUrl(tokenNumber),
-    traits: mapTraits(metadata),
+    metadataUrl,
+    traits,
   };
 }
 
@@ -238,19 +253,22 @@ async function loadOwnedChogs(walletAddress: Address): Promise<ChogToken[]> {
       if (owner.toLowerCase() !== walletAddress.toLowerCase()) {
         throw new Error("The Chog contract returned a token owned by another wallet.");
       }
-      const [metadata, metadataUrl] = await Promise.all([
-        readTokenMetadata(tokenNumber),
+      const [metadataUrl] = await Promise.all([
         tokenMetadataUrl(tokenNumber),
       ]);
+      const metadata = await readTokenMetadata(metadataUrl);
+      const traits = mapTraits(metadata);
       return {
         tokenId: tokenNumber.toString(),
         contractAddress: CHOG_CONTRACT_ADDRESS,
         ownerWallet: walletAddress,
         verified: true,
         name: typeof metadata?.name === "string" ? metadata.name : null,
+        description: metadataText(metadata?.description, 2_000),
+        tier: metadataTier(metadata, traits),
         imageUrl: metadataImage(metadata),
         metadataUrl,
-        traits: mapTraits(metadata),
+        traits,
       };
     }),
   );
@@ -268,8 +286,7 @@ async function tokenMetadataUrl(tokenId: bigint): Promise<string | null> {
     .catch(() => null);
 }
 
-async function readTokenMetadata(tokenId: bigint): Promise<Metadata | null> {
-  const uri = await tokenMetadataUrl(tokenId);
+async function readTokenMetadata(uri: string | null): Promise<Metadata | null> {
   if (!uri) return null;
 
   const cached = metadataCache.get(uri);
@@ -286,6 +303,25 @@ async function readTokenMetadata(tokenId: bigint): Promise<Metadata | null> {
     metadataCache.set(uri, { value: null, expiresAt: Date.now() + 60_000 });
     return null;
   }
+}
+
+function metadataText(value: unknown, maxLength: number): string | null {
+  const normalized =
+    typeof value === "string"
+      ? value.trim()
+      : typeof value === "number" && Number.isFinite(value)
+        ? String(value)
+        : "";
+  return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+function metadataTier(metadata: Metadata | null, traits: ChogTrait[]): string | null {
+  const directTier = metadataText(metadata?.tier, 100);
+  if (directTier) return directTier;
+  return (
+    traits.find((trait) => trait.traitType.trim().toLowerCase() === "tier")
+      ?.traitValue ?? null
+  );
 }
 
 function resolveGatewayUrl(uri: string): string {

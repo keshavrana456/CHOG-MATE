@@ -453,13 +453,15 @@ components:
         updatedAt: { type: string, format: date-time }
     Chog:
       type: object
-      required: [tokenId, contractAddress, ownerWallet, verified]
+      required: [tokenId, contractAddress, ownerWallet, verified, description, tier]
       properties:
         tokenId: { type: string }
         contractAddress: { type: string }
         ownerWallet: { type: string }
         verified: { type: boolean }
         name: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        tier: { type: ["string", "null"] }
         imageUrl: { type: ["string", "null"], format: uri }
         metadataUrl: { type: ["string", "null"], format: uri }
         traits:

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Activity, BadgeCheck, Check, ChevronDown, ExternalLink, Eye, LockKeyhole, LogOut, Save, ShieldCheck, Wallet } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { isAddress } from 'viem';
+import { useConnection, useDisconnect } from 'wagmi';
 import {
   getGetChogQueryKey, getGetMeQueryKey, getGetNftOwnershipQueryKey,
   useGetChog, useGetMe, useGetNftOwnership, useLogoutWallet, useUpdateMeProfile,
@@ -249,6 +250,8 @@ export function SettingsPage() {
   const walletScan=useGetNftOwnership(scanAddress,{query:{enabled:!!scanAddress,queryKey:[...getGetNftOwnershipQueryKey(scanAddress),scanNonce],refetchOnWindowFocus:false,retry:1}});
   const update=useUpdateMeProfile();
   const logout=useLogoutWallet();
+  const walletConnection=useConnection();
+  const walletDisconnect=useDisconnect();
   const qc=useQueryClient();
   const [,navigate]=useLocation();
   function scanWallet(event:FormEvent) {
@@ -277,14 +280,14 @@ export function SettingsPage() {
       await qc.invalidateQueries({queryKey:getGetMeQueryKey()}); setMessage('Discovery visibility updated.');
     } catch {setMessage('We couldn’t update visibility. Please try again.');}
   }
-  async function signOut() { if(!window.confirm('Disconnect this wallet from CHOG MATE?')) return; try { await logout.mutateAsync(); if(supabase) await supabase.auth.signOut(); const wallet = await import('@/lib/appkit'); await wallet.appKit?.disconnect('eip155'); await qc.clear(); navigate('/'); } catch { setMessage('Sign out did not complete. Please try again.'); } }
+  async function signOut() { if(!window.confirm('Disconnect this wallet from CHOG MATE?')) return; try { await logout.mutateAsync(); if(supabase) await supabase.auth.signOut(); if(walletConnection.connector) await walletDisconnect.disconnectAsync({connector:walletConnection.connector}); await qc.clear(); navigate('/'); } catch { setMessage('Sign out did not complete. Please try again.'); } }
   return <AppShell displayName={profile?.displayName}><div className="page-enter">
     <PageTitle eyebrow="Your space, your rules" title="Settings." description="Keep your account comfortable, visible on your terms, and safe." />
     <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
       <aside className="flex gap-2 overflow-x-auto lg:block lg:space-y-2">{[['account','Account'],['discovery','Discovery'],['privacy','Privacy'],['safety','Safety']].map(([id,title])=><a key={id} href={`#${id}`} className="settings-tab shrink-0 rounded-full px-4 py-2.5 text-xs font-bold lg:block lg:rounded-2xl" data-testid={`link-settings-${id}`}>{title}</a>)}</aside>
       <div className="space-y-5">
         <section id="account" className="surface scroll-mt-24 rounded-[26px] p-6"><Eyebrow>Account</Eyebrow><h2 className="display text-2xl font-extrabold text-[#24133f]">Wallet connection</h2>
-          {me.isLoading ? <div className="skeleton mt-4 h-16 rounded-2xl"/> : me.data ? <div className="mt-4 flex flex-col justify-between gap-4 rounded-2xl bg-[#faf6ef] p-4 sm:flex-row sm:items-center"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[#eee8ff] text-[#7047ff]"><Wallet size={18}/></div><div><p className="text-xs font-bold text-[#594d64]">Connected wallet</p><p className="mt-1 break-all text-xs text-[#887c90]" data-testid="text-settings-wallet">{me.data.walletAddress}</p></div></div><button onClick={()=>void signOut()} disabled={logout.isPending} className="inline-flex items-center justify-center gap-2 rounded-full border border-[#e9d7d1] px-4 py-2.5 text-xs font-bold text-[#99534a] hover:bg-white disabled:opacity-50" data-testid="button-sign-out"><LogOut size={14}/>{logout.isPending?'Disconnecting…':'Disconnect wallet'}</button></div> : <p className="mt-3 text-sm text-[#887c90]">No connected wallet session. Connect from the home page to continue.</p>}
+          {me.isLoading ? <div className="skeleton mt-4 h-16 rounded-2xl"/> : me.data ? <div className="mt-4 flex flex-col justify-between gap-4 rounded-2xl bg-[#faf6ef] p-4 sm:flex-row sm:items-center"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[#eee8ff] text-[#7047ff]"><Wallet size={18}/></div><div><p className="text-xs font-bold text-[#594d64]">Connected wallet</p><p className="mt-1 break-all text-xs text-[#887c90]" data-testid="text-settings-wallet">{me.data.walletAddress}</p></div></div><button onClick={()=>void signOut()} disabled={logout.isPending||walletDisconnect.isPending} className="inline-flex items-center justify-center gap-2 rounded-full border border-[#e9d7d1] px-4 py-2.5 text-xs font-bold text-[#99534a] hover:bg-white disabled:opacity-50" data-testid="button-sign-out"><LogOut size={14}/>{logout.isPending||walletDisconnect.isPending?'Disconnecting…':'Disconnect wallet'}</button></div> : <p className="mt-3 text-sm text-[#887c90]">No connected wallet session. Connect from the home page to continue.</p>}
         </section>
         <section id="discovery" className="surface scroll-mt-24 rounded-[26px] p-6"><Eyebrow>Discovery & privacy</Eyebrow><h2 className="display text-2xl font-extrabold text-[#24133f]">You choose who sees you.</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#82778c]">When hidden, your profile won’t appear in discovery. You can still see your existing matches and conversations.</p>
           <p className="mt-5 text-xs font-bold text-[#5c5067]">Choose profile visibility</p><div className="mt-2 grid max-w-md grid-cols-2 gap-2"><button onClick={()=>setVisible(true)} aria-pressed={visible===true} className={`rounded-xl border px-3 py-3 text-xs font-bold ${visible===true?'border-[#8a63ff] bg-[#f2ecff] text-[#6246b0]':'border-[#e9e0d3] bg-white text-[#7c7185]'}`} data-testid="button-settings-show">Show me</button><button onClick={()=>setVisible(false)} aria-pressed={visible===false} className={`rounded-xl border px-3 py-3 text-xs font-bold ${visible===false?'border-[#8a63ff] bg-[#f2ecff] text-[#6246b0]':'border-[#e9e0d3] bg-white text-[#7c7185]'}`} data-testid="button-settings-hide">Hide me</button></div><p className="mt-2 text-[11px] leading-5 text-[#998ea0]">{visible===null?'Your current preference could not be loaded. Choose an option to update it.':`Your profile is currently ${visible?'visible':'hidden'} in discovery.`}</p>

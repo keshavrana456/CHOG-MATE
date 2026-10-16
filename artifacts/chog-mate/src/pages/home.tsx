@@ -20,6 +20,7 @@ import {
   useGetCollectionStats,
 } from '@workspace/api-client-react';
 import { AppShell, Eyebrow } from '@/components/shared';
+import { walletAuthConfigured } from '@/lib/config';
 
 const WalletAuthPanel = lazy(() => import('@/components/wallet-auth'));
 const chogGif = 'https://media1.tenor.com/m/O3waRaZ2i4AAAAAC/chog-monad.gif';
@@ -87,11 +88,7 @@ export default function HomePage() {
 
   function connect() {
     setFeedback('');
-    if (
-      !import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ||
-      !import.meta.env.VITE_SUPABASE_URL ||
-      !import.meta.env.VITE_SUPABASE_ANON_KEY
-    ) {
+    if (!walletAuthConfigured) {
       setFeedback('Wallet sign-in is not configured yet. Please try again later.');
       return;
     }

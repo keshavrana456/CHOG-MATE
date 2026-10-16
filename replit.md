@@ -12,14 +12,15 @@ A wallet-verified social discovery app for Chog Genesis NFT holders on Monad.
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas after editing `lib/api-spec/openapi.yaml`
 - Database schema is managed by Supabase; migration SQL is in `artifacts/chog-mate/supabase/migrations/`.
 
-Required environment:
+Environment configuration:
 
-- Frontend: `VITE_WALLETCONNECT_PROJECT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- API server: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET`
-- Optional live marketplace feed and collection statistics: `OPENSEA_API_KEY`
-- Optional Monad RPC override: `MONAD_RPC_URL` (defaults to `https://rpc.monad.xyz`)
+- Copy `artifacts/chog-mate/.env.example` to `artifacts/chog-mate/.env.local` for local frontend development.
+- Public frontend variables: `VITE_WALLETCONNECT_PROJECT_ID`, `VITE_MONAD_RPC_URL`, `VITE_CHOG_CONTRACT_ADDRESS`, `VITE_CHOG_TOKEN_ADDRESS`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_NFT_METADATA_API`, and `VITE_NFT_INDEXER_API`.
+- The contract address defaults to the Chog Genesis contract; the token address defaults to the public `$CHOG` token address. The Monad RPC defaults to `https://rpc.monad.xyz`. NFT API endpoints are optional until those integrations are implemented.
+- The API server also needs `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SESSION_SECRET`. `MONAD_RPC_URL` is an optional server-only RPC override; otherwise the server accepts `VITE_MONAD_RPC_URL` or uses the public Monad RPC.
+- Optional live marketplace feed and collection statistics: server-side `OPENSEA_API_KEY`.
 
-Keep `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET`, and `OPENSEA_API_KEY` server-side; never expose them through `VITE_` variables.
+**Security:** Vite embeds every `VITE_*` value in browser assets. Use only public project IDs, public endpoint URLs, public contract addresses, and the Supabase anon key in these variables. Never put private keys, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET`, or other credentials in a `VITE_*` variable. Keep server credentials in Replit Secrets.
 
 ## Stack
 

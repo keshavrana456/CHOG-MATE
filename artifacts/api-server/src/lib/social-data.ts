@@ -265,18 +265,23 @@ export function profileToApi(
 }
 
 export function mapDbChog(chog: DbChog, traits: DbTrait[]): ChogToken {
+  const mappedTraits = traits.map((trait) => ({
+    traitType: trait.trait_type,
+    traitValue: trait.trait_value,
+    rarity: trait.rarity,
+  }));
   return {
     tokenId: chog.token_id,
     contractAddress: chog.contract_address,
     ownerWallet: chog.owner_wallet,
     verified: chog.verified,
     name: null,
+    description: null,
+    tier:
+      mappedTraits.find((trait) => trait.traitType.trim().toLowerCase() === "tier")
+        ?.traitValue ?? null,
     imageUrl: chog.image_url,
     metadataUrl: chog.metadata_url,
-    traits: traits.map((trait) => ({
-      traitType: trait.trait_type,
-      traitValue: trait.trait_value,
-      rarity: trait.rarity,
-    })),
+    traits: mappedTraits,
   };
 }
