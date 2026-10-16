@@ -22,8 +22,13 @@ import { appKit, monadNetwork } from "@/lib/appkit";
 import { walletAuthConfigured } from "@/lib/config";
 import { supabase } from "@/lib/supabase";
 import { ChogArtwork } from "@/components/shared";
+import ManualAddressScan from "@/components/manual-address-scan";
 
-export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boolean }) {
+export default function WalletAuthPanel({
+  autoOpen = false,
+}: {
+  autoOpen?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [openingWallet, setOpeningWallet] = useState(false);
   const [appKitModalOpen, setAppKitModalOpen] = useState(false);
@@ -31,7 +36,11 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
   const challenge = useCreateAuthChallenge();
   const verify = useVerifyWallet();
   const connection = useConnection();
-  const { connectAsync, connectors, isPending: isConnectPending } = useConnect();
+  const {
+    connectAsync,
+    connectors,
+    isPending: isConnectPending,
+  } = useConnect();
   const { disconnectAsync, isPending: isDisconnectPending } = useDisconnect();
   const { switchChainAsync, isPending: isSwitchPending } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
@@ -83,9 +92,13 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
         return;
       }
 
-      const injectedConnector = connectors.find((connector) => connector.id === "injected");
+      const injectedConnector = connectors.find(
+        (connector) => connector.id === "injected",
+      );
       if (!injectedConnector) {
-        throw new Error("No browser wallet was detected. Install or unlock a wallet and try again.");
+        throw new Error(
+          "No browser wallet was detected. Install or unlock a wallet and try again.",
+        );
       }
       await connectAsync({ connector: injectedConnector });
     } finally {
@@ -97,7 +110,8 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
     if (!autoOpen || autoOpened.current || isConnected) return;
     autoOpened.current = true;
     void openWallet().catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : "Please try again.";
+      const message =
+        error instanceof Error ? error.message : "Please try again.";
       setFeedback(`The wallet connection could not be opened. ${message}`);
     });
   }, [autoOpen, isConnected, openWallet]);
@@ -107,7 +121,8 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
     try {
       await switchChainAsync({ chainId: monadNetwork.id });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Please try again.";
+      const message =
+        error instanceof Error ? error.message : "Please try again.";
       setFeedback(`Could not switch to Monad. ${message}`);
     }
   }
@@ -117,7 +132,8 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
     try {
       await disconnectAsync();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Please try again.";
+      const message =
+        error instanceof Error ? error.message : "Please try again.";
       setFeedback(`Wallet disconnect failed. ${message}`);
     }
   }
@@ -128,7 +144,8 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
       try {
         await openWallet();
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Please try again.";
+        const message =
+          error instanceof Error ? error.message : "Please try again.";
         setFeedback(`Wallet connection failed. ${message}`);
       }
       return;
@@ -138,17 +155,23 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
       return;
     }
     if (!address || !walletClient) {
-      setFeedback("Your wallet connection is still loading. Try again in a moment.");
+      setFeedback(
+        "Your wallet connection is still loading. Try again in a moment.",
+      );
       return;
     }
     if (!walletAuthConfigured || !supabase) {
-      setFeedback("Your wallet is connected, but account sign-in is not configured yet.");
+      setFeedback(
+        "Your wallet is connected, but account sign-in is not configured yet.",
+      );
       return;
     }
 
     setBusy(true);
     try {
-      const authChallenge = await challenge.mutateAsync({ data: { walletAddress: address } });
+      const authChallenge = await challenge.mutateAsync({
+        data: { walletAddress: address },
+      });
       const signature = await walletClient.signMessage({
         account: address,
         message: authChallenge.message,
@@ -181,7 +204,8 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
       setFeedback(
         err.code === 4001
           ? "Wallet signing was cancelled. Your wallet remains connected."
-          : err.message || "Wallet verification could not be completed. Please try again.",
+          : err.message ||
+              "Wallet verification could not be completed. Please try again.",
       );
     } finally {
       setBusy(false);
@@ -189,44 +213,51 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
   }
 
   return (
-    <>
-      <button
-        onClick={() => void connect()}
-        disabled={busy || isConnecting || isWrongNetwork}
-        className="button-primary inline-flex min-h-[54px] items-center gap-3 rounded-full px-7 text-sm font-bold disabled:cursor-wait disabled:opacity-70"
-        data-testid="button-connect-wallet"
-      >
-        {isConnecting
-          ? "Connecting wallet…"
-          : busy
-            ? "Verifying your wallet…"
-            : isConnected
-              ? "Verify wallet"
-              : "Connect wallet"}
-        <ArrowRight size={17} />
-      </button>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-[#92869a]">
-        <span role="status" aria-live="polite" data-testid="status-wallet-connection">
+    <div className="flex w-full flex-col items-start gap-3">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+        <button
+          onClick={() => void connect()}
+          disabled={busy || isConnecting || isWrongNetwork}
+          className="button-primary inline-flex min-h-[54px] items-center gap-3 rounded-full px-7 text-sm font-bold disabled:cursor-wait disabled:opacity-70"
+          data-testid="button-connect-wallet"
+        >
           {isConnecting
-            ? "Connecting to wallet…"
-            : isWrongNetwork
-              ? `Wrong network · ${connection.chain?.name ?? `Chain ${connection.chainId}`}`
+            ? "Connecting wallet…"
+            : busy
+              ? "Verifying your wallet…"
               : isConnected
-                ? `Connected to Monad · ${address?.slice(0, 6)}…${address?.slice(-4)}`
-                : "A signature proves ownership. It never moves funds."}
-        </span>
-        {isConnected && (
-          <button
-            type="button"
-            onClick={() => void disconnectWallet()}
-            disabled={isDisconnectPending}
-            className="font-semibold text-[#a3315e] underline-offset-4 hover:underline disabled:opacity-60"
-            data-testid="button-wallet-disconnect"
+                ? "Verify wallet"
+                : "Connect wallet"}
+          <ArrowRight size={17} />
+        </button>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-[#92869a]">
+          <span
+            role="status"
+            aria-live="polite"
+            data-testid="status-wallet-connection"
           >
-            {isDisconnectPending ? "Disconnecting…" : "Disconnect"}
-          </button>
-        )}
+            {isConnecting
+              ? "Connecting to wallet…"
+              : isWrongNetwork
+                ? `Wrong network · ${connection.chain?.name ?? `Chain ${connection.chainId}`}`
+                : isConnected
+                  ? `Connected to Monad · ${address?.slice(0, 6)}…${address?.slice(-4)}`
+                  : "A signature proves ownership. It never moves funds."}
+          </span>
+          {isConnected && (
+            <button
+              type="button"
+              onClick={() => void disconnectWallet()}
+              disabled={isDisconnectPending}
+              className="font-semibold text-[#a3315e] underline-offset-4 hover:underline disabled:opacity-60"
+              data-testid="button-wallet-disconnect"
+            >
+              {isDisconnectPending ? "Disconnecting…" : "Disconnect"}
+            </button>
+          )}
+        </div>
       </div>
+      <ManualAddressScan />
       {isWrongNetwork && (
         <div
           className="mt-3 flex flex-col gap-2 rounded-2xl border border-[#ead8ce] bg-[#fff8f1] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -253,17 +284,24 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
           aria-label="Connected wallet Chog ownership"
           data-testid="panel-wallet-chog-ownership"
         >
-          {ownership.isLoading || (!ownershipMatchesWallet && !ownership.isError) ? (
-            <p className="flex items-center gap-2 text-sm font-semibold text-[#715795]" role="status">
+          {ownership.isLoading ||
+          (!ownershipMatchesWallet && !ownership.isError) ? (
+            <p
+              className="flex items-center gap-2 text-sm font-semibold text-[#715795]"
+              role="status"
+            >
               <RefreshCw size={15} className="animate-spin" />
               Checking Chog ownership for this wallet…
             </p>
           ) : ownership.isError ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="display text-lg font-extrabold text-[#24133f]">Ownership check unavailable</h2>
+                <h2 className="display text-lg font-extrabold text-[#24133f]">
+                  Ownership check unavailable
+                </h2>
                 <p className="mt-1 text-xs leading-5 text-[#82778c]">
-                  We couldn’t verify this wallet on Monad. No ownership result has been assumed.
+                  We couldn’t verify this wallet on Monad. No ownership result
+                  has been assumed.
                 </p>
               </div>
               <button
@@ -273,17 +311,27 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
                 className="button-soft inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full px-4 text-xs font-bold disabled:opacity-60"
                 data-testid="button-retry-chog-ownership"
               >
-                <RefreshCw size={13} className={ownership.isFetching ? "animate-spin" : ""} />
+                <RefreshCw
+                  size={13}
+                  className={ownership.isFetching ? "animate-spin" : ""}
+                />
                 Try again
               </button>
             </div>
           ) : ownedChogs.length === 0 ? (
             <div>
-              <h2 className="display text-xl font-extrabold text-[#24133f]" data-testid="heading-no-chog-found">
+              <h2
+                className="display text-xl font-extrabold text-[#24133f]"
+                data-testid="heading-no-chog-found"
+              >
                 No Chog Found
               </h2>
-              <p className="mt-1 text-sm leading-6 text-[#82778c]" data-testid="text-no-chog-profile-requirement">
-                A Chog NFT is required to create a CHOG MATE profile. Connect a wallet that owns a Chog NFT to continue.
+              <p
+                className="mt-1 text-sm leading-6 text-[#82778c]"
+                data-testid="text-no-chog-profile-requirement"
+              >
+                A Chog NFT is required to create a CHOG MATE profile. Connect a
+                wallet that owns a Chog NFT to continue.
               </p>
             </div>
           ) : (
@@ -292,9 +340,12 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
                 <BadgeCheck size={16} className="text-[#447a43]" />
                 <div>
                   <h2 className="display text-lg font-extrabold text-[#24133f]">
-                    {ownedChogs.length} Chog{ownedChogs.length === 1 ? "" : "s"} found
+                    {ownedChogs.length} Chog{ownedChogs.length === 1 ? "" : "s"}{" "}
+                    found
                   </h2>
-                  <p className="text-xs text-[#82778c]">Verified against Monad for this wallet.</p>
+                  <p className="text-xs text-[#82778c]">
+                    Verified against Monad for this wallet.
+                  </p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -312,7 +363,9 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
                         Chog #{chog.tokenId}
                       </p>
                       {chog.name && (
-                        <p className="mt-1 truncate text-[10px] text-[#766a80]">{chog.name}</p>
+                        <p className="mt-1 truncate text-[10px] text-[#766a80]">
+                          {chog.name}
+                        </p>
                       )}
                       {chog.tier && (
                         <p className="mt-1 text-[10px] font-semibold text-[#715795]">
@@ -332,12 +385,15 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
                               className="max-w-full truncate rounded-full bg-[#f4effb] px-2 py-1 text-[9px] font-semibold text-[#715795]"
                             >
                               {trait.traitType}: {trait.traitValue}
-                              {typeof trait.rarity === "number" && ` · ${trait.rarity}%`}
+                              {typeof trait.rarity === "number" &&
+                                ` · ${trait.rarity}%`}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <p className="mt-1 text-[10px] text-[#958a9b]">No trait data returned</p>
+                        <p className="mt-1 text-[10px] text-[#958a9b]">
+                          No trait data returned
+                        </p>
                       )}
                       {chog.metadataUrl && (
                         <a
@@ -367,6 +423,6 @@ export default function WalletAuthPanel({ autoOpen = false }: { autoOpen?: boole
           {feedback}
         </p>
       )}
-    </>
+    </div>
   );
 }
