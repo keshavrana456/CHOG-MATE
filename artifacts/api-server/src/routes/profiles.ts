@@ -10,6 +10,12 @@ import {
 import { getAddress, isAddress } from "viem";
 import { calculateCompatibility } from "../lib/compatibility";
 import {
+  calculateDiscoveryRank,
+  calculateLookingForRelevance,
+  calculateProfileCompleteness,
+  calculateRecentActivity,
+} from "../lib/discovery-ranking";
+import {
   CHOG_CONTRACT_ADDRESS,
   getOwnedChogs,
   isCurrentChogOwner,
@@ -305,7 +311,8 @@ router.get("/discover", async (req, res): Promise<void> => {
     const bundles = await loadProfileBundles(ids);
     const ranked: Array<{
       bundle: NonNullable<Awaited<ReturnType<typeof loadProfileBundle>>>;
-      score: number;
+      compatibility: number | null;
+      rankScore: number;
       reasons: string[];
       lastSeen: string;
     }> = [];
@@ -368,22 +375,40 @@ router.get("/discover", async (req, res): Promise<void> => {
             },
           )
         : null;
+      const compatibilityScore = compatibility?.score ?? null;
+      const rankScore = calculateDiscoveryRank({
+        compatibility: compatibilityScore,
+        lookingForRelevance: compatibilityProfile
+          ? calculateLookingForRelevance(
+              compatibilityProfile.profile.looking_for,
+              bundle.profile.looking_for,
+            )
+          : 0,
+        completeness: calculateProfileCompleteness(bundle.profile),
+        recentActivity: calculateRecentActivity(bundle.user.last_seen),
+      });
       ranked.push({
         bundle,
-        score: compatibility?.score ?? 0,
+        compatibility: compatibilityScore,
+        rankScore,
         reasons: compatibility?.reasons ?? [],
         lastSeen: bundle.user.last_seen ?? bundle.user.created_at ?? "",
       });
     }
 
-    ranked.sort((a, b) => b.score - a.score || b.lastSeen.localeCompare(a.lastSeen));
+    ranked.sort(
+      (a, b) =>
+        b.rankScore - a.rankScore ||
+        b.lastSeen.localeCompare(a.lastSeen) ||
+        a.bundle.user.id.localeCompare(b.bundle.user.id),
+    );
     const hasMoreCandidates = (candidates?.length ?? 0) === pageSize;
     res.json(
       DiscoverProfilesResponse.parse({
-        profiles: ranked.slice(0, limit).map(({ bundle, score, reasons }) =>
+        profiles: ranked.slice(0, limit).map(({ bundle, compatibility, reasons }) =>
           profileToApi(
             bundle,
-            compatibilityProfile ? score : null,
+            compatibility,
             reasons,
             parsed.data.mode === "date",
           ),
