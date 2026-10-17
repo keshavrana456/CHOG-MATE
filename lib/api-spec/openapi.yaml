@@ -95,8 +95,18 @@ paths:
           description: Wallet address is invalid
         "403":
           description: Address does not currently own a Chog Genesis NFT
+        "409":
+          description: Wallet is already linked to another account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
         "503":
           description: Ownership or account service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
   /auth/logout:
     post:
       operationId: logoutWallet
@@ -199,6 +209,12 @@ paths:
                 $ref: "#/components/schemas/CurrentProfile"
         "401":
           description: Wallet session required
+        "503":
+          description: Profile or database service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
   /me/profile:
     put:
       operationId: updateMeProfile
@@ -217,6 +233,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Profile"
+        "409":
+          description: Username is already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "503":
+          description: Profile or database service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
   /me/chog:
     patch:
       operationId: selectActiveChog
@@ -434,6 +462,12 @@ paths:
           description: Match removed
 components:
   schemas:
+    ApiErrorResponse:
+      type: object
+      required: [code, error]
+      properties:
+        code: { type: string }
+        error: { type: string }
     HealthStatus:
       type: object
       properties:

@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ApiErrorResponse,
   AuthChallenge,
   BlockInput,
   Chog,
@@ -372,7 +373,7 @@ return customFetch<SessionUser>(getCreateAddressSessionUrl(),
 
 export const getCreateAddressSessionMutationKey = () => ['createAddressSession'] as const;
 
-export const getCreateAddressSessionMutationOptions = <TError = ErrorType<void>,
+export const getCreateAddressSessionMutationOptions = <TError = ErrorType<void | ApiErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAddressSession>>, TError,CreateAddressSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createAddressSession>>, TError,CreateAddressSessionMutationVariables, TContext> => {
 
@@ -401,13 +402,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateAddressSessionMutationResult = NonNullable<Awaited<ReturnType<typeof createAddressSession>>>
     export type CreateAddressSessionMutationBody = BodyType<WalletInput>
-    export type CreateAddressSessionMutationError = ErrorType<void>
+    export type CreateAddressSessionMutationError = ErrorType<void | ApiErrorResponse>
     export type CreateAddressSessionMutationVariables = {data: BodyType<WalletInput>}
 
     /**
  * @summary Start an address-only social account after verifying Chog ownership
  */
-export const useCreateAddressSession = <TError = ErrorType<void>,
+export const useCreateAddressSession = <TError = ErrorType<void | ApiErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAddressSession>>, TError,CreateAddressSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createAddressSession>>,
@@ -840,7 +841,7 @@ export const getGetMeQueryKey = () => {
     }
 
 
-export const getGetMeQueryOptions = <TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetMeQueryOptions = <TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<void | ApiErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -859,14 +860,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetMeQueryResult = NonNullable<Awaited<ReturnType<typeof getMe>>>
-export type GetMeQueryError = ErrorType<void>
+export type GetMeQueryError = ErrorType<void | ApiErrorResponse>
 
 
 /**
  * @summary Get the signed-in user's profile and verified Chog
  */
 
-export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<void>>(
+export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<void | ApiErrorResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -926,7 +927,7 @@ return customFetch<Profile>(getUpdateMeProfileUrl(),
 
 export const getUpdateMeProfileMutationKey = () => ['updateMeProfile'] as const;
 
-export const getUpdateMeProfileMutationOptions = <TError = ErrorType<unknown>,
+export const getUpdateMeProfileMutationOptions = <TError = ErrorType<ApiErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMeProfile>>, TError,UpdateMeProfileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateMeProfile>>, TError,UpdateMeProfileMutationVariables, TContext> => {
 
@@ -955,13 +956,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateMeProfileMutationResult = NonNullable<Awaited<ReturnType<typeof updateMeProfile>>>
     export type UpdateMeProfileMutationBody = BodyType<ProfileInput>
-    export type UpdateMeProfileMutationError = ErrorType<unknown>
+    export type UpdateMeProfileMutationError = ErrorType<ApiErrorResponse>
     export type UpdateMeProfileMutationVariables = {data: BodyType<ProfileInput>}
 
     /**
  * @summary Create or update editable profile fields
  */
-export const useUpdateMeProfile = <TError = ErrorType<unknown>,
+export const useUpdateMeProfile = <TError = ErrorType<ApiErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMeProfile>>, TError,UpdateMeProfileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateMeProfile>>,

@@ -1,10 +1,10 @@
 ---
-name: Manual wallet test profiles
-description: Security boundary for profile previews created from an unsigned wallet-address scan.
+name: Manual address onboarding
+description: Product and security boundary for persistent accounts created after an unsigned address passes an on-chain Chog ownership check.
 ---
 
-Profiles created from a manually entered address must remain local to that browser and clearly labeled as test-only. Do not save them to the shared profile database or present them as authenticated community profiles.
+Manual wallet-address onboarding is an intentional persistent social-account flow after Chog ownership is verified on-chain. These sessions remain address-only: the public address does not prove wallet control, must never be treated as a signed wallet session, and must not authorize transactions.
 
-**Why:** On-chain ownership proves which address owns the NFT, but an unsigned address entry does not prove that the user controls that address. The normal profile API relies on authenticated wallet sessions and revalidates ownership.
+**Why:** The user specified that address-only onboarding must create or resume persistent CHOG MATE accounts and save profiles, while an unsigned public address still does not prove control of its private key.
 
-**How to apply:** Keep address-only testing read-only with respect to shared services. A test profile may save entered fields in browser storage, but must not call profile creation, login, signing, or transaction endpoints.
+**How to apply:** Allow address-only sessions to create profiles and use social discovery. Require a signed wallet-connected session for transactions or any action that depends on control of the private key. Keep any separate test-only profile preview isolated from shared persistence.

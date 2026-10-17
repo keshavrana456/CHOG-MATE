@@ -5,6 +5,11 @@
  * CHOG MATE wallet, NFT, profile, discovery, and social API
  * OpenAPI spec version: 0.1.0
  */
+export interface ApiErrorResponse {
+  code: string;
+  error: string;
+}
+
 export interface HealthStatus {
   status: string;
 }

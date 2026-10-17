@@ -28,6 +28,7 @@ import {
   syncVerifiedChogs,
 } from "../lib/social-data";
 import { getSupabaseAdmin } from "../lib/supabase";
+import { getSafeBackendErrorFields, toApiFailure } from "../lib/backend-errors";
 import { readWalletSession, requireWalletSession } from "../lib/wallet-auth";
 
 const router: IRouter = Router();
@@ -46,7 +47,7 @@ router.get("/me", async (req, res): Promise<void> => {
       .eq("user_id", session.userId)
       .maybeSingle();
     if (storedProfileError) {
-      throw new SocialDataError("CHOG MATE database setup is incomplete.");
+      throw new SocialDataError("CHOG MATE database setup is incomplete.", storedProfileError);
     }
     const bundle = await loadProfileBundle(session.userId);
     const selected = bundle
@@ -94,7 +95,7 @@ router.put("/me/profile", async (req, res): Promise<void> => {
       .eq("user_id", session.userId)
       .maybeSingle();
     if (existingProfileError) {
-      throw new SocialDataError("CHOG MATE database setup is incomplete.");
+      throw new SocialDataError("CHOG MATE database setup is incomplete.", existingProfileError);
     }
     const activeTokenId =
       existingProfile?.active_chog_token_id ?? parsed.data.selectedChogTokenId;
@@ -152,10 +153,13 @@ router.put("/me/profile", async (req, res): Promise<void> => {
     );
     if (profileError) {
       if (profileError.code === "23505") {
-        res.status(409).json({ error: "That username is already taken." });
+        res.status(409).json({
+          code: "USERNAME_TAKEN",
+          error: "That username is already taken.",
+        });
         return;
       }
-      throw new SocialDataError("CHOG MATE database setup is incomplete.");
+      throw new SocialDataError("CHOG MATE database setup is incomplete.", profileError);
     }
 
     const { error: preferencesError } = await admin.from("preferences").upsert(
@@ -171,7 +175,7 @@ router.put("/me/profile", async (req, res): Promise<void> => {
       { onConflict: "user_id" },
     );
     if (preferencesError) {
-      throw new SocialDataError("CHOG MATE database setup is incomplete.");
+      throw new SocialDataError("CHOG MATE database setup is incomplete.", preferencesError);
     }
 
     const bundle = await loadProfileBundle(session.userId, selectedChog.tokenId);
@@ -514,19 +518,18 @@ function sendProfileError(
   res: Response,
   error: unknown,
 ): void {
-  if (error instanceof SocialDataError) {
-    res.status(503).json({
-      error: "CHOG MATE's database isn't ready yet. Apply the included Supabase migration and try again.",
-    });
-    return;
-  }
+  const failure = toApiFailure(error, {
+    code: error instanceof SocialDataError ? "DATABASE_OPERATION_FAILED" : "PROFILE_SERVICE_FAILED",
+    error:
+      error instanceof SocialDataError
+        ? "Supabase could not complete this profile operation. Check the CHOG MATE migrations and server configuration."
+        : "Your profile service is temporarily unavailable. Please try again.",
+  });
   req.log.error(
-    { errorType: error instanceof Error ? error.name : "UnknownError" },
+    { ...getSafeBackendErrorFields(error), responseCode: failure.body.code },
     "Profile service failed",
   );
-  res.status(503).json({
-    error: "Your profile service is temporarily unavailable. Please try again.",
-  });
+  res.status(failure.status).json(failure.body);
 }
 
 export default router;

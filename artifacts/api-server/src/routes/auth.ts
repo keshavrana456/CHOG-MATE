@@ -17,6 +17,7 @@ import {
   verifyWalletChallenge,
 } from "../lib/wallet-auth";
 import { getSupabaseAdmin } from "../lib/supabase";
+import { getSafeBackendErrorFields, toApiFailure } from "../lib/backend-errors";
 
 const router: IRouter = Router();
 
@@ -120,7 +121,7 @@ router.post("/auth/address", async (req, res): Promise<void> => {
       .eq("wallet_address", account.walletAddress.toLowerCase())
       .maybeSingle();
     if (existingUserError) {
-      throw new Error("The CHOG MATE account could not be loaded.");
+      throw existingUserError;
     }
     if (existingUser && existingUser.id !== account.userId) {
       res.status(409).json({
@@ -137,7 +138,7 @@ router.post("/auth/address", async (req, res): Promise<void> => {
       },
       { onConflict: "id" },
     );
-    if (userError) throw new Error("The CHOG MATE account could not be saved.");
+    if (userError) throw userError;
 
     setWalletSessionCookie(
       res,
@@ -157,13 +158,16 @@ router.post("/auth/address", async (req, res): Promise<void> => {
       }),
     );
   } catch (error) {
-    req.log.warn(
-      { errorType: error instanceof Error ? error.name : "UnknownError" },
+    const failure = toApiFailure(error, {
+      code: "ACCOUNT_SESSION_FAILED",
+      error:
+        "We couldn't create or resume this account session. Check the Supabase Auth configuration and server logs.",
+    });
+    req.log.error(
+      { ...getSafeBackendErrorFields(error), responseCode: failure.body.code },
       "Address-only account sign-in failed",
     );
-    res.status(503).json({
-      error: "We couldn't verify or open this account right now. Please try again shortly.",
-    });
+    res.status(failure.status).json(failure.body);
   }
 });
 

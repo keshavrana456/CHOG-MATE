@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './apiErrorResponse';
 export * from './authChallenge';
 export * from './blockInput';
 export * from './chog';

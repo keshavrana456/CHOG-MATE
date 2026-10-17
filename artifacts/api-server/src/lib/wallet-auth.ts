@@ -114,10 +114,11 @@ export async function createWalletAuthSession(
   const { data: signedIn, error: signInError } =
     await publicClient.auth.signInWithPassword(credentials);
   if (signInError || !signedIn.user || !signedIn.session) {
-    if (createError) {
-      throw new Error("Wallet account could not be established");
-    }
-    throw new Error("Wallet account could not be established");
+    throw (
+      signInError ??
+      createError ??
+      new Error("Wallet account could not be established")
+    );
   }
   if (created.user && created.user.id !== signedIn.user.id) {
     throw new Error("Wallet account identity did not match");

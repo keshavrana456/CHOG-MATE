@@ -60,8 +60,8 @@ export interface ProfileBundle {
 }
 
 export class SocialDataError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, cause?: unknown) {
+    super(message, cause === undefined ? undefined : { cause });
     this.name = "SocialDataError";
   }
 }
@@ -81,19 +81,19 @@ export async function syncVerifiedChogs(
     },
     { onConflict: "id" },
   );
-  if (userError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+  if (userError) throw new SocialDataError("CHOG MATE database setup is incomplete.", userError);
 
   if (tokens.length === 0) {
     const { error: hideError } = await admin
       .from("profiles")
       .update({ profile_visible: false, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
-    if (hideError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+    if (hideError) throw new SocialDataError("CHOG MATE database setup is incomplete.", hideError);
     const { error: revokeError } = await admin
       .from("chogs")
       .update({ verified: false, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
-    if (revokeError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+    if (revokeError) throw new SocialDataError("CHOG MATE database setup is incomplete.", revokeError);
     return;
   }
 
@@ -115,7 +115,7 @@ export async function syncVerifiedChogs(
       { onConflict: "contract_address,token_id" },
     )
     .select("id,token_id");
-  if (chogError || !chogRows) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+  if (chogError || !chogRows) throw new SocialDataError("CHOG MATE database setup is incomplete.", chogError);
 
   const rowByToken = new Map<string, { id: string; token_id: string }>(
     chogRows.map((row: { id: string; token_id: string }) => [row.token_id, row]),
@@ -127,7 +127,7 @@ export async function syncVerifiedChogs(
       .from("chog_traits")
       .delete()
       .eq("chog_id", row.id);
-    if (deleteError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+    if (deleteError) throw new SocialDataError("CHOG MATE database setup is incomplete.", deleteError);
     if (token.traits.length > 0) {
       const { error: traitError } = await admin.from("chog_traits").insert(
         token.traits.map((trait) => ({
@@ -137,7 +137,7 @@ export async function syncVerifiedChogs(
           rarity: trait.rarity,
         })),
       );
-      if (traitError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+      if (traitError) throw new SocialDataError("CHOG MATE database setup is incomplete.", traitError);
     }
   }
 
@@ -146,7 +146,7 @@ export async function syncVerifiedChogs(
     .update({ verified: false, updated_at: new Date().toISOString() })
     .eq("user_id", userId)
     .neq("contract_address", CHOG_CONTRACT_ADDRESS.toLowerCase());
-  if (revokeOldError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+  if (revokeOldError) throw new SocialDataError("CHOG MATE database setup is incomplete.", revokeOldError);
 }
 
 export async function loadProfileBundle(
@@ -159,7 +159,12 @@ export async function loadProfileBundle(
       admin.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
       admin.from("users").select("*").eq("id", userId).maybeSingle(),
     ]);
-  if (profileError || userError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+  if (profileError || userError) {
+    throw new SocialDataError(
+      "CHOG MATE database setup is incomplete.",
+      profileError ?? userError,
+    );
+  }
   if (!profile || !user) return null;
 
   const preferredId = selectedTokenId ?? profile.active_chog_token_id;
@@ -171,14 +176,14 @@ export async function loadProfileBundle(
     .eq("contract_address", CHOG_CONTRACT_ADDRESS.toLowerCase());
   if (preferredId) chogQuery = chogQuery.eq("token_id", preferredId);
   const { data: chog, error: chogError } = await chogQuery.limit(1).maybeSingle();
-  if (chogError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+  if (chogError) throw new SocialDataError("CHOG MATE database setup is incomplete.", chogError);
   if (!chog) return null;
 
   const { data: traits, error: traitsError } = await admin
     .from("chog_traits")
     .select("*")
     .eq("chog_id", chog.id);
-  if (traitsError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+  if (traitsError) throw new SocialDataError("CHOG MATE database setup is incomplete.", traitsError);
   return {
     profile: profile as DbProfile,
     user: user as DbUser,
@@ -203,7 +208,10 @@ export async function loadProfileBundles(
       .eq("contract_address", CHOG_CONTRACT_ADDRESS.toLowerCase()),
   ]);
   if (profilesResult.error || usersResult.error || chogsResult.error) {
-    throw new SocialDataError("CHOG MATE database setup is incomplete.");
+    throw new SocialDataError(
+      "CHOG MATE database setup is incomplete.",
+      profilesResult.error ?? usersResult.error ?? chogsResult.error,
+    );
   }
   const profiles = (profilesResult.data ?? []) as DbProfile[];
   const users = (usersResult.data ?? []) as DbUser[];
@@ -221,7 +229,7 @@ export async function loadProfileBundles(
   const { data: traits, error: traitsError } = chogIds.length
     ? await admin.from("chog_traits").select("*").in("chog_id", chogIds)
     : { data: [], error: null };
-  if (traitsError) throw new SocialDataError("CHOG MATE database setup is incomplete.");
+  if (traitsError) throw new SocialDataError("CHOG MATE database setup is incomplete.", traitsError);
   const traitsByChogId = new Map<string, DbTrait[]>();
   for (const trait of (traits ?? []) as DbTrait[]) {
     const current = traitsByChogId.get(trait.chog_id) ?? [];
