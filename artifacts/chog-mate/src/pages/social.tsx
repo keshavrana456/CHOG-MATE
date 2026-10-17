@@ -46,7 +46,11 @@ function ReportControl({
     if (!window.confirm(`Block @${profile.username}? You will no longer see this profile.`)) return;
     try {
       await block.mutateAsync({ data: { targetUserId: profile.userId } });
-      await qc.invalidateQueries({ queryKey: getDiscoverProfilesQueryKey() });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: getDiscoverProfilesQueryKey() }),
+        qc.invalidateQueries({ queryKey: getGetLikeInboxQueryKey() }),
+        qc.invalidateQueries({ queryKey: getGetMatchesQueryKey() }),
+      ]);
       setNotice('Profile blocked.');
     } catch { setNotice('We could not block this profile. Please try again.'); }
   }
@@ -410,6 +414,9 @@ export function DiscoverPage() {
   const [profileIndex, setProfileIndex] = useState(0);
   const [walletDialogOpen, setWalletDialogOpen] = useState(false);
   const [viewingProfile, setViewingProfile] = useState<Profile | null>(null);
+  const [superLikeTarget, setSuperLikeTarget] = useState<Profile | null>(null);
+  const qc = useQueryClient();
+  const swipe = useSwipeProfile();
   const me = useGetMe({ query: { queryKey: getGetMeQueryKey(), retry: false } });
   const canInteract = Boolean(
     me.data &&
@@ -426,14 +433,51 @@ export function DiscoverPage() {
     setProfileIndex(0);
     setToast('');
   }, [cursor, mode]);
+  async function recordSwipe(
+    profile: Profile,
+    selected: 'pass'|'like'|'super_like',
+    transactionHash?: Hex,
+  ) {
+    const result = await swipe.mutateAsync({
+      data: {
+        targetUserId: profile.userId,
+        action: selected,
+        ...(transactionHash ? { transactionHash } : {}),
+      },
+    });
+    if (!result.recorded) {
+      throw new Error('This action was already recorded. Refresh discovery before trying again.');
+    }
+    setProfileIndex(index => index + 1);
+    setToast(
+      result.matched
+        ? "It's a match. Open Matches to start a conversation."
+        : selected === 'super_like'
+          ? 'Super Like sent. 100 $CHOG was transferred; this does not create a Match.'
+          : selected === 'like'
+            ? 'Like sent. If they like you back, you’ll match.'
+            : 'Profile passed.',
+    );
+    void qc.invalidateQueries({ queryKey: getGetMatchesQueryKey() });
+    void qc.invalidateQueries({ queryKey: getGetLikeInboxQueryKey() });
+    void qc.invalidateQueries({ queryKey: getDiscoverProfilesQueryKey() });
+  }
+
   function action(selected: 'pass'|'like'|'super_like') {
     if (!canInteract) {
       setWalletDialogOpen(true);
       return;
     }
-    const label = selected === 'super_like' ? 'Super Like' : selected === 'like' ? 'Like' : 'Pass';
-    setToast(`${label} selected for this session only. No action was sent or saved.`);
-    setProfileIndex(index => index + 1);
+    const profile = profiles[profileIndex];
+    if (!profile) return;
+    if (selected === 'super_like') {
+      setSuperLikeTarget(profile);
+      return;
+    }
+    setToast('');
+    void recordSwipe(profile, selected).catch(error => {
+      setToast(error instanceof Error ? error.message : 'Your action could not be saved. Please try again.');
+    });
   }
   const currentCard = profiles[profileIndex];
   return <AppShell><div className="page-enter">
@@ -445,13 +489,23 @@ export function DiscoverPage() {
     !canInteract ? <EmptyState title={me.data ? 'Finish your profile to discover.' : 'Connect your wallet to discover.'} detail={me.data ? 'Add your photo, age, location, bio, interests, hobbies, and skills to see eligible Chog holders and compatibility scores.' : 'Sign in with the wallet holding your verified Chog to see real, eligible profiles.'} action={me.data ? <Link href="/profile" className="button-primary inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold" data-testid="link-complete-profile">Complete profile <ArrowRight size={15}/></Link> : <button onClick={()=>setWalletDialogOpen(true)} className="button-primary rounded-full px-5 py-3 text-sm font-bold" data-testid="button-connect-to-discover">Connect wallet</button>} /> :
     <QueryState loading={isLoading} error={isError} retry={()=>void refetch()}>
       {currentCard ? <>
-        <DiscoverCard profile={currentCard} onAction={selected => action(selected)} onOpenProfile={()=>setViewingProfile(currentCard)} onAuthRequired={()=>setWalletDialogOpen(true)} onMediaError={()=>{setToast('A profile or Chog image could not be loaded. This card was skipped for this session.');setProfileIndex(index=>index+1);}} canInteract={canInteract} pending={false} />
+        <DiscoverCard profile={currentCard} onAction={selected => action(selected)} onOpenProfile={()=>setViewingProfile(currentCard)} onAuthRequired={()=>setWalletDialogOpen(true)} onMediaError={()=>{setToast('A profile or Chog image could not be loaded. This card was skipped for this session.');setProfileIndex(index=>index+1);}} canInteract={canInteract} pending={swipe.isPending} />
         <div className="mx-auto mt-5 flex max-w-[620px] items-center justify-between"><p className="text-xs text-[#92869a]">Real holders. Real possibilities.</p>{profileIndex >= profiles.length && data?.nextCursor && <button onClick={()=>{setCursor(data.nextCursor || undefined);setProfileIndex(0);}} className="button-soft inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold" data-testid="button-load-more">More people <ArrowRight size={14}/></button>}</div>
       </> : data?.nextCursor ? <EmptyState mark="cm" title="Looking a little further." detail="No complete profiles in this group yet. Continue to the next set of real Chog holders." action={<button onClick={()=>setCursor(data.nextCursor || undefined)} className="button-soft rounded-full px-5 py-2.5 text-sm font-bold" data-testid="button-load-more">Continue discovery</button>} /> :
       <EmptyState mark="cm" title="No one new, for now." detail="You’ve reached the end of the complete, eligible Chog holders available to discover. Check back as the community grows." action={<button onClick={()=>{setProfileIndex(0);void refetch();}} className="button-soft rounded-full px-5 py-2.5 text-sm font-bold" data-testid="button-refresh-discovery">Check again</button>} />}
     </QueryState>
     }
     <ProfileDetailsDialog profile={viewingProfile} open={Boolean(viewingProfile)} onOpenChange={open=>{if(!open)setViewingProfile(null);}}/>
+    <SuperLikeDialog
+      profile={superLikeTarget}
+      walletAddress={me.data?.walletAddress ?? null}
+      onOpenChange={open=>{if(!open)setSuperLikeTarget(null);}}
+      onConfirmed={async transactionHash => {
+        if (!superLikeTarget) throw new Error('The selected profile is no longer available.');
+        await recordSwipe(superLikeTarget, 'super_like', transactionHash);
+        setSuperLikeTarget(null);
+      }}
+    />
     <WalletConnectionDialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}/>
   </div></AppShell>;
 }
@@ -461,6 +515,9 @@ export function MatchesPage() {
   const { data, isLoading, isError, refetch } = useGetMatches({
     query: { enabled: Boolean(me.data), queryKey: getGetMatchesQueryKey() },
   });
+  const inbox = useGetLikeInbox({
+    query: { enabled: Boolean(me.data), queryKey: getGetLikeInboxQueryKey() },
+  });
   const [walletDialogOpen, setWalletDialogOpen] = useState(true);
   const qc = useQueryClient();
   const matches = data || [];
@@ -469,6 +526,19 @@ export function MatchesPage() {
   if (!me.data) return <AppShell><div className="page-enter"><PageTitle eyebrow="The feeling is mutual" title="Your matches." description="Sign in to view your mutual connections."/><EmptyState title="Connect your wallet to continue." detail="Your matches are private. Verify your wallet to view them."/></div><WalletConnectionDialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}/></AppShell>;
   return <AppShell><div className="page-enter">
     <PageTitle eyebrow="The feeling is mutual" title="Your matches." description="Only real mutual connections live here. Take a look around." />
+    <section className="mb-8" aria-labelledby="incoming-likes-title">
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div><Eyebrow>Make the first move</Eyebrow><h2 id="incoming-likes-title" className="display text-2xl font-extrabold text-[#24133f]">Likes for you</h2></div>
+        {inbox.data?.length ? <span className="rounded-full bg-[#f2ecff] px-3 py-1.5 text-xs font-bold text-[#6246b0]">{inbox.data.length}</span> : null}
+      </div>
+      {inbox.isError
+        ? <div className="rounded-2xl border border-[#eedbd6] bg-white p-4 text-sm text-[#8b5a59]" role="alert">Your incoming likes could not be loaded. <button onClick={()=>void inbox.refetch()} className="font-bold underline">Try again</button></div>
+        : inbox.isLoading
+          ? <div className="skeleton h-28 rounded-2xl" />
+          : inbox.data?.length
+            ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{inbox.data.map(item=><IncomingLikeCard key={item.id} item={item} onHandled={()=>{void qc.invalidateQueries({queryKey:getGetLikeInboxQueryKey()});void qc.invalidateQueries({queryKey:getGetMatchesQueryKey()});}} />)}</div>
+            : <div className="surface rounded-2xl px-5 py-4 text-sm text-[#82778c]">No new likes yet. New likes and confirmed Super Likes will appear here.</div>}
+    </section>
     <QueryState loading={isLoading} error={isError} retry={()=>void refetch()}>
       {matches.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{matches.map(match=><article className="surface rounded-[26px] p-5" key={match.id} data-testid={`card-match-${match.id}`}>
         <div className="flex items-center gap-4"><ProfileAvatar profile={match.profile} size="lg"/><div className="min-w-0 flex-1"><h2 className="display truncate text-xl font-extrabold text-[#24133f]">{match.profile.displayName}</h2><p className="text-xs text-[#82778c]">@{match.profile.username}</p></div><span className="rounded-full bg-[#f2ecff] px-3 py-1.5 text-xs font-bold text-[#6246b0]">{match.compatibility}%</span></div>
@@ -477,6 +547,50 @@ export function MatchesPage() {
       </article>)}</div> : <EmptyState mark="cm" title="Your first match is out there." detail="When someone you like likes you back, you’ll find your mutual connection here." action={<Link href="/discover" className="button-primary inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold" data-testid="link-discover-from-matches">Meet people <ArrowRight size={15}/></Link>} />}
     </QueryState>
   </div></AppShell>;
+}
+
+type LikeInboxItem = NonNullable<ReturnType<typeof useGetLikeInbox>["data"]>[number];
+
+function IncomingLikeCard({ item, onHandled }: { item: LikeInboxItem; onHandled: () => void }) {
+  const [notice, setNotice] = useState("");
+  const swipe = useSwipeProfile();
+
+  async function respond(action: "like" | "pass") {
+    setNotice("");
+    try {
+      const result = await swipe.mutateAsync({
+        data: { targetUserId: item.profile.userId, action },
+      });
+      if (!result.recorded) {
+        setNotice("This response was already recorded. Refresh your incoming likes.");
+        return;
+      }
+      onHandled();
+      setNotice(result.matched ? "It's a match. Open Messages to say hello." : "Your response was saved.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Your response could not be saved.");
+    }
+  }
+
+  return <article className="surface rounded-[24px] p-4" data-testid={`card-incoming-like-${item.id}`}>
+    <div className="flex items-start gap-3">
+      <ProfileAvatar profile={item.profile} size="md" />
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate text-sm font-bold text-[#35264b]">{item.profile.displayName}</h3>
+        <p className="truncate text-xs text-[#887c90]">@{item.profile.username}</p>
+        {item.type === "super_like"
+          ? <p className="mt-2 rounded-xl bg-[#f2ecff] px-3 py-2 text-xs font-semibold leading-5 text-[#6246b0]">{item.profile.username} Super Liked You · 100 $CHOG was sent to your wallet.</p>
+          : <p className="mt-2 text-xs text-[#7c7185]">Liked your profile</p>}
+        <time className="mt-2 block text-[10px] text-[#9b8fa0]">{new Date(item.createdAt).toLocaleString()}</time>
+      </div>
+      <ReportControl profile={item.profile} canInteract onAuthRequired={()=>undefined} />
+    </div>
+    {notice && <p className="mt-3 text-xs leading-5 text-[#7053a4]" role="status">{notice}</p>}
+    <div className="mt-4 flex gap-2">
+      <button onClick={()=>void respond("like")} disabled={swipe.isPending} className="button-primary flex-1 rounded-full px-4 py-2.5 text-xs font-bold disabled:opacity-50">{swipe.isPending ? "Saving…" : "Like Back"}</button>
+      <button onClick={()=>void respond("pass")} disabled={swipe.isPending} className="button-soft flex-1 rounded-full px-4 py-2.5 text-xs font-bold disabled:opacity-50">Ignore</button>
+    </div>
+  </article>;
 }
 
 function MatchActions({ matchId, username, onDone }: { matchId: string; username: string; onDone: () => void }) {
@@ -500,6 +614,7 @@ export function MessagesPage() {
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [voiceDraft, setVoiceDraft] = useState<File | null>(null);
+  const [imageDraft, setImageDraft] = useState<File | null>(null);
   const send = useSendMessage();
   const requestUpload = useRequestMessageAttachmentUploadUrl();
   const qc = useQueryClient();
@@ -513,9 +628,25 @@ export function MessagesPage() {
     () => voiceDraft ? URL.createObjectURL(voiceDraft) : null,
     [voiceDraft],
   );
+  const imageDraftUrl = useMemo(
+    () => imageDraft ? URL.createObjectURL(imageDraft) : null,
+    [imageDraft],
+  );
   useEffect(() => () => {
     if (voiceDraftUrl) URL.revokeObjectURL(voiceDraftUrl);
   }, [voiceDraftUrl]);
+  useEffect(() => () => {
+    if (imageDraftUrl) URL.revokeObjectURL(imageDraftUrl);
+  }, [imageDraftUrl]);
+  useEffect(() => {
+    setVoiceDraft(null);
+    setImageDraft(null);
+    setMediaError('');
+  }, [matchId]);
+  useEffect(() => () => {
+    recorderRef.current?.stop();
+    mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+  }, []);
   useEffect(() => {
     if (!recording) {
       setRecordingSeconds(0);
@@ -582,7 +713,8 @@ export function MessagesPage() {
           attachmentSize: file.size,
         },
       });
-      setVoiceDraft(null);
+      if (messageType === 'voice') setVoiceDraft(null);
+      if (messageType === 'image') setImageDraft(null);
       await qc.invalidateQueries({ queryKey: messageKey });
       await qc.invalidateQueries({ queryKey: getGetMatchesQueryKey() });
     } catch (error) {
@@ -654,7 +786,17 @@ export function MessagesPage() {
   function selectAttachment(event: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
-    if (file) void sendMedia(file, type);
+    if (!file) return;
+    if (type === 'image') {
+      if (!file.type.startsWith('image/') || file.size > 15 * 1024 * 1024) {
+        setMediaError('Choose an image smaller than 15 MB.');
+        return;
+      }
+      setMediaError('');
+      setImageDraft(file);
+      return;
+    }
+    void sendMedia(file, type);
   }
 
   async function submit(event: FormEvent) {
@@ -699,6 +841,7 @@ export function MessagesPage() {
           {mediaError && <p className="text-right text-xs text-[#a34646]" role="alert" data-testid="status-media-error">{mediaError}</p>}
         </div>
         <form onSubmit={submit} className="border-t border-[#24133f12] p-4">
+          {imageDraft && imageDraftUrl && <div className="mb-3 flex items-center gap-3 rounded-2xl bg-[#f5f0ff] p-3"><img src={imageDraftUrl} alt="Image preview before sending" className="h-16 w-16 shrink-0 rounded-xl object-cover"/><span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#594d64]">{imageDraft.name}</span><button type="button" onClick={()=>setImageDraft(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[#7357a7]" aria-label="Discard image"><X size={17}/></button><button type="button" onClick={()=>void sendMedia(imageDraft,'image')} disabled={mediaBusy} className="button-primary rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-50">{mediaBusy?'Sending…':'Send image'}</button></div>}
           {voiceDraft && voiceDraftUrl && <div className="mb-3 flex items-center gap-2 rounded-2xl bg-[#f5f0ff] p-3"><audio src={voiceDraftUrl} controls className="min-w-0 flex-1" aria-label="Voice message preview"/><button type="button" onClick={()=>setVoiceDraft(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[#7357a7]" aria-label="Discard voice message"><X size={17}/></button><button type="button" onClick={()=>void sendMedia(voiceDraft,'voice')} disabled={mediaBusy} className="button-primary rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-50">{mediaBusy?'Sending…':'Send voice'}</button></div>}
           <div className="flex gap-2">
             <input value={content} onChange={e=>setContent(e.target.value)} maxLength={4000} placeholder="Write a message…" className="field min-w-0 flex-1" aria-label="Message" data-testid="input-message"/>

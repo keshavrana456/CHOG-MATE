@@ -221,7 +221,7 @@ router.get("/likes/inbox", async (req, res): Promise<void> => {
   try {
     await requireEligibleProfile(session);
     const admin = getSupabaseAdmin();
-    const [likes, superLikes, blocksFrom, blocksTo, matchesA, matchesB] =
+    const [likes, superLikes, blocksFrom, blocksTo, matchesA, matchesB, sentLikes, sentPasses, sentSuperLikes] =
       await Promise.all([
         admin.from("likes").select("id,from_user_id,created_at").eq("to_user_id", session.userId),
         admin
@@ -241,8 +241,11 @@ router.get("/likes/inbox", async (req, res): Promise<void> => {
           .select("user_a")
           .eq("user_b", session.userId)
           .eq("status", "active"),
+        admin.from("likes").select("to_user_id").eq("from_user_id", session.userId),
+        admin.from("passes").select("to_user_id").eq("from_user_id", session.userId),
+        admin.from("super_likes").select("to_user_id").eq("from_user_id", session.userId),
       ]);
-    if ([likes, superLikes, blocksFrom, blocksTo, matchesA, matchesB].some((item) => item.error)) {
+    if ([likes, superLikes, blocksFrom, blocksTo, matchesA, matchesB, sentLikes, sentPasses, sentSuperLikes].some((item) => item.error)) {
       throw new SocialDataError("CHOG MATE likes are not ready yet.");
     }
 
@@ -251,6 +254,9 @@ router.get("/likes/inbox", async (req, res): Promise<void> => {
     for (const row of blocksTo.data ?? []) excluded.add(row.blocker_id);
     for (const row of matchesA.data ?? []) excluded.add(row.user_b);
     for (const row of matchesB.data ?? []) excluded.add(row.user_a);
+    for (const row of sentLikes.data ?? []) excluded.add(row.to_user_id);
+    for (const row of sentPasses.data ?? []) excluded.add(row.to_user_id);
+    for (const row of sentSuperLikes.data ?? []) excluded.add(row.to_user_id);
 
     const bySender = new Map<string, {
       id: string;
@@ -312,7 +318,7 @@ router.get("/matches", async (req, res): Promise<void> => {
   try {
     await requireEligibleProfile(session);
     const admin = getSupabaseAdmin();
-    const [asA, asB] = await Promise.all([
+    const [asA, asB, blockedByMe, blockedMe] = await Promise.all([
       admin
         .from("matches")
         .select("*")
@@ -325,10 +331,19 @@ router.get("/matches", async (req, res): Promise<void> => {
         .eq("user_b", session.userId)
         .eq("status", "active")
         .order("last_activity", { ascending: false, nullsFirst: false }),
+      admin.from("blocks").select("blocked_user_id").eq("blocker_id", session.userId),
+      admin.from("blocks").select("blocker_id").eq("blocked_user_id", session.userId),
     ]);
-    if (asA.error || asB.error) throw new SocialDataError("CHOG MATE matching is not ready yet.");
+    if ([asA, asB, blockedByMe, blockedMe].some((result) => result.error)) {
+      throw new SocialDataError("CHOG MATE matching is not ready yet.");
+    }
 
-    const rows = [...((asA.data ?? []) as MatchRow[]), ...((asB.data ?? []) as MatchRow[])];
+    const excluded = new Set([
+      ...(blockedByMe.data ?? []).map((row) => row.blocked_user_id),
+      ...(blockedMe.data ?? []).map((row) => row.blocker_id),
+    ]);
+    const rows = [...((asA.data ?? []) as MatchRow[]), ...((asB.data ?? []) as MatchRow[])]
+      .filter((row) => !excluded.has(row.user_a === session.userId ? row.user_b : row.user_a));
     rows.sort((a, b) => (b.last_activity ?? b.created_at).localeCompare(a.last_activity ?? a.created_at));
     const otherIds = rows.map((row) => (row.user_a === session.userId ? row.user_b : row.user_a));
     const bundles = await loadProfileBundles(otherIds);
@@ -711,7 +726,28 @@ async function getActiveMatch(matchId: string, userId: string): Promise<MatchRow
   if (error) throw new SocialDataError("CHOG MATE matching is not ready yet.");
   if (!data) return null;
   const match = data as MatchRow;
-  return match.user_a === userId || match.user_b === userId ? match : null;
+  if (match.user_a !== userId && match.user_b !== userId) return null;
+
+  const otherUserId = match.user_a === userId ? match.user_b : match.user_a;
+  const admin = getSupabaseAdmin();
+  const [blockedByMe, blockedMe] = await Promise.all([
+    admin
+      .from("blocks")
+      .select("id")
+      .eq("blocker_id", userId)
+      .eq("blocked_user_id", otherUserId)
+      .maybeSingle(),
+    admin
+      .from("blocks")
+      .select("id")
+      .eq("blocker_id", otherUserId)
+      .eq("blocked_user_id", userId)
+      .maybeSingle(),
+  ]);
+  if (blockedByMe.error || blockedMe.error) {
+    throw new SocialDataError("CHOG MATE matching is not ready yet.");
+  }
+  return blockedByMe.data || blockedMe.data ? null : match;
 }
 
 function sendSocialError(req: Request, res: Response, error: unknown): void {

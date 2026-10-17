@@ -19,37 +19,32 @@ export function NotificationCenter() {
   const unreadCount = useMemo(() => items.filter((item) => !item.read_at).length, [items]);
 
   useEffect(() => {
-    if (!supabase) {
+    const client = supabase;
+    if (!client) {
       setUserId(null);
       setItems([]);
       return;
     }
-    let channel: ReturnType<typeof supabase.channel> | undefined;
+    let channel: ReturnType<typeof client.channel> | null = null;
     let disposed = false;
+    let activeUserId: string | null = null;
+    let retryTimer: number | null = null;
 
-    const refresh = async (nextUserId: string | null) => {
+    const loadNotifications = async (nextUserId: string) => {
       if (disposed) return;
-      if (!nextUserId) {
-        setUserId(null);
-        setItems([]);
-        if (channel) {
-          void supabase.removeChannel(channel);
-          channel = undefined;
-        }
-        return;
-      }
-      setUserId(nextUserId);
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("notifications")
         .select("id,actor_id,type,related_id,read_at,created_at")
         .eq("user_id", nextUserId)
         .order("created_at", { ascending: false })
         .limit(30);
-      if (disposed) return;
+      if (disposed || activeUserId !== nextUserId) return;
       if (!error) setItems((data ?? []) as NotificationRow[]);
+    };
 
-      if (channel) void supabase.removeChannel(channel);
-      channel = supabase
+    const subscribe = (nextUserId: string) => {
+      if (disposed || activeUserId !== nextUserId || channel) return;
+      const nextChannel = client
         .channel(`user-notifications:${nextUserId}`)
         .on(
           "postgres_changes",
@@ -70,32 +65,92 @@ export function NotificationCenter() {
               setItems((current) =>
                 current.map((item) => item.id === updated.id ? updated : item),
               );
+              } else if (payload.eventType === "DELETE") {
+                const removed = payload.old as Pick<NotificationRow, "id">;
+                setItems((current) => current.filter((item) => item.id !== removed.id));
             }
           },
         )
         .subscribe((status) => {
-          if (status === "SUBSCRIBED") void refresh(nextUserId);
+          if (
+            disposed ||
+            activeUserId !== nextUserId ||
+            channel !== nextChannel
+          ) return;
+          if (status === "SUBSCRIBED") {
+            if (retryTimer !== null) {
+              window.clearTimeout(retryTimer);
+              retryTimer = null;
+            }
+            void loadNotifications(nextUserId);
+          } else if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            channel = null;
+            void client.removeChannel(nextChannel);
+            if (retryTimer === null) {
+              retryTimer = window.setTimeout(() => {
+                retryTimer = null;
+                subscribe(nextUserId);
+              }, 3000);
+            }
+          }
         });
     };
 
-    void supabase.auth.getSession().then(({ data }) => {
-      void refresh(data.session?.user.id ?? null);
+    const stopSubscription = () => {
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+      if (channel) {
+        const current = channel;
+        channel = null;
+        void client.removeChannel(current);
+      }
+    };
+
+    const changeUser = async (nextUserId: string | null) => {
+      if (disposed) return;
+      if (nextUserId === activeUserId) {
+        if (nextUserId) {
+          subscribe(nextUserId);
+          await loadNotifications(nextUserId);
+        }
+        return;
+      }
+
+      stopSubscription();
+      activeUserId = nextUserId;
+      setUserId(nextUserId);
+      setItems([]);
+      if (!nextUserId) return;
+
+      subscribe(nextUserId);
+      await loadNotifications(nextUserId);
+    };
+
+    void client.auth.getSession().then(({ data }) => {
+      void changeUser(data.session?.user.id ?? null);
     });
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      window.setTimeout(() => void refresh(session?.user.id ?? null), 0);
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(() => void changeUser(session?.user.id ?? null), 0);
     });
 
     return () => {
       disposed = true;
       authListener.subscription.unsubscribe();
-      if (channel) void supabase.removeChannel(channel);
+      stopSubscription();
     };
   }, []);
 
   async function markRead(item: NotificationRow) {
-    if (item.read_at || !supabase || !userId) return;
+    const client = supabase;
+    if (item.read_at || !client || !userId) return;
     const readAt = new Date().toISOString();
-    const { error } = await supabase
+    const { error } = await client
       .from("notifications")
       .update({ read_at: readAt })
       .eq("id", item.id)
@@ -110,9 +165,10 @@ export function NotificationCenter() {
   }
 
   async function markAllRead() {
-    if (!supabase || !userId || unreadCount === 0) return;
+    const client = supabase;
+    if (!client || !userId || unreadCount === 0) return;
     const readAt = new Date().toISOString();
-    const { error } = await supabase
+    const { error } = await client
       .from("notifications")
       .update({ read_at: readAt })
       .eq("user_id", userId)
