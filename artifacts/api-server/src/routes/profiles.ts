@@ -7,9 +7,13 @@ import {
   UpdateMeProfileBody,
   UpdateMeProfileResponse,
 } from "@workspace/api-zod";
-import { getAddress } from "viem";
+import { getAddress, isAddress } from "viem";
 import { calculateCompatibility } from "../lib/compatibility";
-import { getOwnedChogs, isCurrentChogOwner } from "../lib/chogs";
+import {
+  CHOG_CONTRACT_ADDRESS,
+  getOwnedChogs,
+  isCurrentChogOwner,
+} from "../lib/chogs";
 import {
   loadProfileBundle,
   loadProfileBundles,
@@ -18,7 +22,7 @@ import {
   syncVerifiedChogs,
 } from "../lib/social-data";
 import { getSupabaseAdmin } from "../lib/supabase";
-import { requireWalletSession } from "../lib/wallet-auth";
+import { readWalletSession, requireWalletSession } from "../lib/wallet-auth";
 
 const router: IRouter = Router();
 
@@ -230,8 +234,7 @@ router.patch("/me/chog", async (req, res): Promise<void> => {
 });
 
 router.get("/discover", async (req, res): Promise<void> => {
-  const session = requireWalletSession(req, res);
-  if (!session) return;
+  const session = readWalletSession(req);
   const parsed = DiscoverProfilesQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "Those discovery settings are not valid." });
@@ -240,34 +243,52 @@ router.get("/discover", async (req, res): Promise<void> => {
 
   try {
     const admin = getSupabaseAdmin();
-    const currentProfile = await loadProfileBundle(session.userId);
-    if (!currentProfile) {
-      res.status(403).json({ error: "Complete your profile before discovering Chog holders." });
-      return;
-    }
+    const currentProfile = session
+      ? await loadProfileBundle(session.userId)
+      : null;
     const limit = parsed.data.limit ?? 12;
     const offset = parseCursor(parsed.data.cursor);
-    const [outBlocks, inBlocks, passes, likes, matchesA, matchesB] = await Promise.all([
-      admin.from("blocks").select("blocked_user_id").eq("blocker_id", session.userId),
-      admin.from("blocks").select("blocker_id").eq("blocked_user_id", session.userId),
-      admin.from("passes").select("to_user_id").eq("from_user_id", session.userId),
-      admin.from("likes").select("to_user_id").eq("from_user_id", session.userId),
-      admin.from("matches").select("user_b").eq("user_a", session.userId).eq("status", "active"),
-      admin.from("matches").select("user_a").eq("user_b", session.userId).eq("status", "active"),
-    ]);
-    if ([outBlocks, inBlocks, passes, likes, matchesA, matchesB].some((result) => result.error)) {
-      throw new SocialDataError("CHOG MATE database setup is incomplete.");
-    }
+    const excluded = new Set<string>();
+    if (session) {
+      const [outBlocks, inBlocks, passes, likes, matchesA, matchesB] =
+        await Promise.all([
+          admin
+            .from("blocks")
+            .select("blocked_user_id")
+            .eq("blocker_id", session.userId),
+          admin
+            .from("blocks")
+            .select("blocker_id")
+            .eq("blocked_user_id", session.userId),
+          admin.from("passes").select("to_user_id").eq("from_user_id", session.userId),
+          admin.from("likes").select("to_user_id").eq("from_user_id", session.userId),
+          admin
+            .from("matches")
+            .select("user_b")
+            .eq("user_a", session.userId)
+            .eq("status", "active"),
+          admin
+            .from("matches")
+            .select("user_a")
+            .eq("user_b", session.userId)
+            .eq("status", "active"),
+        ]);
+      if (
+        [outBlocks, inBlocks, passes, likes, matchesA, matchesB].some(
+          (result) => result.error,
+        )
+      ) {
+        throw new SocialDataError("CHOG MATE database setup is incomplete.");
+      }
 
-    const excluded = new Set<string>([
-      session.userId,
-      ...((outBlocks.data ?? []).map((row: { blocked_user_id: string }) => row.blocked_user_id)),
-      ...((inBlocks.data ?? []).map((row: { blocker_id: string }) => row.blocker_id)),
-      ...((passes.data ?? []).map((row: { to_user_id: string }) => row.to_user_id)),
-      ...((likes.data ?? []).map((row: { to_user_id: string }) => row.to_user_id)),
-      ...((matchesA.data ?? []).map((row: { user_b: string }) => row.user_b)),
-      ...((matchesB.data ?? []).map((row: { user_a: string }) => row.user_a)),
-    ]);
+      excluded.add(session.userId);
+      for (const row of outBlocks.data ?? []) excluded.add(row.blocked_user_id);
+      for (const row of inBlocks.data ?? []) excluded.add(row.blocker_id);
+      for (const row of passes.data ?? []) excluded.add(row.to_user_id);
+      for (const row of likes.data ?? []) excluded.add(row.to_user_id);
+      for (const row of matchesA.data ?? []) excluded.add(row.user_b);
+      for (const row of matchesB.data ?? []) excluded.add(row.user_a);
+    }
 
     const pageSize = Math.min(150, limit * 5);
     const { data: candidates, error: candidatesError } = await admin
@@ -288,8 +309,26 @@ router.get("/discover", async (req, res): Promise<void> => {
       reasons: string[];
       lastSeen: string;
     }> = [];
+    const compatibilityProfile =
+      currentProfile &&
+      isCompleteDiscoverableProfile(currentProfile) &&
+      isAddress(currentProfile.user.wallet_address)
+        ? await isCurrentChogOwner(
+            getAddress(currentProfile.user.wallet_address),
+            currentProfile.chog.tokenId,
+          ).then((ownsChog) => ownsChog ? currentProfile : null)
+        : null;
 
     for (const [userId, bundle] of bundles) {
+      if (
+        !isCompleteDiscoverableProfile(bundle) ||
+        !isAddress(bundle.user.wallet_address) ||
+        (session &&
+          bundle.user.wallet_address.toLowerCase() ===
+            session.walletAddress.toLowerCase())
+      ) {
+        continue;
+      }
       if (!matchesMode(bundle.profile.looking_for, parsed.data.mode ?? "discover")) continue;
       const ownsSelected = await isCurrentChogOwner(
         getAddress(bundle.user.wallet_address),
@@ -309,28 +348,30 @@ router.get("/discover", async (req, res): Promise<void> => {
         continue;
       }
 
-      const compatibility = calculateCompatibility(
-        {
-          interests: currentProfile.profile.interests,
-          looking_for: currentProfile.profile.looking_for,
-          skills: currentProfile.profile.skills,
-          location: currentProfile.profile.location,
-          timezone: currentProfile.profile.timezone,
-          chog: currentProfile.chog,
-        },
-        {
-          interests: bundle.profile.interests,
-          looking_for: bundle.profile.looking_for,
-          skills: bundle.profile.skills,
-          location: bundle.profile.location,
-          timezone: bundle.profile.timezone,
-          chog: bundle.chog,
-        },
-      );
+      const compatibility = compatibilityProfile
+        ? calculateCompatibility(
+            {
+              interests: compatibilityProfile.profile.interests,
+              looking_for: compatibilityProfile.profile.looking_for,
+              skills: compatibilityProfile.profile.skills,
+              location: compatibilityProfile.profile.location,
+              timezone: compatibilityProfile.profile.timezone,
+              chog: compatibilityProfile.chog,
+            },
+            {
+              interests: bundle.profile.interests,
+              looking_for: bundle.profile.looking_for,
+              skills: bundle.profile.skills,
+              location: bundle.profile.location,
+              timezone: bundle.profile.timezone,
+              chog: bundle.chog,
+            },
+          )
+        : null;
       ranked.push({
         bundle,
-        score: compatibility.score,
-        reasons: compatibility.reasons,
+        score: compatibility?.score ?? 0,
+        reasons: compatibility?.reasons ?? [],
         lastSeen: bundle.user.last_seen ?? bundle.user.created_at ?? "",
       });
     }
@@ -340,7 +381,12 @@ router.get("/discover", async (req, res): Promise<void> => {
     res.json(
       DiscoverProfilesResponse.parse({
         profiles: ranked.slice(0, limit).map(({ bundle, score, reasons }) =>
-          profileToApi(bundle, score, reasons, parsed.data.mode === "date"),
+          profileToApi(
+            bundle,
+            compatibilityProfile ? score : null,
+            reasons,
+            parsed.data.mode === "date",
+          ),
         ),
         nextCursor: hasMoreCandidates ? String(offset + pageSize) : null,
       }),
@@ -349,6 +395,26 @@ router.get("/discover", async (req, res): Promise<void> => {
     sendProfileError(req, res, error);
   }
 });
+
+function isCompleteDiscoverableProfile(
+  bundle: NonNullable<Awaited<ReturnType<typeof loadProfileBundle>>>,
+): boolean {
+  const { profile, user, chog } = bundle;
+  return (
+    profile.profile_visible &&
+    typeof profile.username === "string" &&
+    /^[a-zA-Z0-9_]{2,24}$/.test(profile.username) &&
+    typeof profile.display_name === "string" &&
+    profile.display_name.trim().length > 0 &&
+    profile.active_chog_token_id === chog.tokenId &&
+    Array.isArray(profile.looking_for) &&
+    profile.looking_for.length > 0 &&
+    chog.verified &&
+    /^[0-9]+$/.test(chog.tokenId) &&
+    chog.contractAddress.toLowerCase() === CHOG_CONTRACT_ADDRESS.toLowerCase() &&
+    chog.ownerWallet.toLowerCase() === user.wallet_address.toLowerCase()
+  );
+}
 
 function parseCursor(cursor?: string): number {
   if (!cursor) return 0;

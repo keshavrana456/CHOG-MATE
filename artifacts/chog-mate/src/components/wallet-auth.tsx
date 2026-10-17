@@ -26,8 +26,10 @@ import ManualAddressScan from "@/components/manual-address-scan";
 
 export default function WalletAuthPanel({
   autoOpen = false,
+  showManualAddressScan = true,
 }: {
   autoOpen?: boolean;
+  showManualAddressScan?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [openingWallet, setOpeningWallet] = useState(false);
@@ -257,7 +259,7 @@ export default function WalletAuthPanel({
           )}
         </div>
       </div>
-      <ManualAddressScan />
+      {showManualAddressScan && <ManualAddressScan />}
       {isWrongNetwork && (
         <div
           className="mt-3 flex flex-col gap-2 rounded-2xl border border-[#ead8ce] bg-[#fff8f1] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
