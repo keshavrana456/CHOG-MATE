@@ -1,18 +1,28 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Activity, BadgeCheck, Check, RefreshCw } from "lucide-react";
 import { isAddress } from "viem";
+import { useLocation } from "wouter";
 import {
   getGetNftOwnershipQueryKey,
   useGetNftOwnership,
 } from "@workspace/api-client-react";
 import { ChogArtwork } from "@/components/shared";
+import {
+  clearManualTestFlow,
+  readManualTestFlow,
+  writeManualTestFlow,
+} from "@/lib/manual-test-profile";
 
 export default function ManualAddressScan() {
-  const [scanInput, setScanInput] = useState("");
-  const [scanAddress, setScanAddress] = useState("");
+  const [restoredFlow] = useState(readManualTestFlow);
+  const [scanInput, setScanInput] = useState(restoredFlow?.walletAddress ?? "");
+  const [scanAddress, setScanAddress] = useState(restoredFlow?.walletAddress ?? "");
   const [scanNonce, setScanNonce] = useState(0);
   const [scanError, setScanError] = useState("");
-  const [selectedTestChog, setSelectedTestChog] = useState("");
+  const [selectedTestChog, setSelectedTestChog] = useState(
+    restoredFlow?.selectedTokenId ?? "",
+  );
+  const [, navigate] = useLocation();
   const ownership = useGetNftOwnership(scanAddress, {
     query: {
       enabled: Boolean(scanAddress),
@@ -38,6 +48,26 @@ export default function ManualAddressScan() {
         )
       : [];
 
+  useEffect(() => {
+    if (
+      ownershipMatchesAddress &&
+      !ownership.isFetching &&
+      !ownership.isError &&
+      selectedTestChog &&
+      !chogs.some((chog) => chog.tokenId === selectedTestChog)
+    ) {
+      setSelectedTestChog("");
+      writeManualTestFlow({ walletAddress: scanAddress, selectedTokenId: "" });
+    }
+  }, [
+    chogs,
+    ownership.isError,
+    ownership.isFetching,
+    ownershipMatchesAddress,
+    scanAddress,
+    selectedTestChog,
+  ]);
+
   function scanAddressForChogs(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setScanError("");
@@ -49,6 +79,10 @@ export default function ManualAddressScan() {
       return;
     }
     setScanAddress(enteredAddress);
+    writeManualTestFlow({
+      walletAddress: enteredAddress,
+      selectedTokenId: "",
+    });
     setScanNonce((value) => value + 1);
   }
 
@@ -92,6 +126,7 @@ export default function ManualAddressScan() {
               setScanAddress("");
               setSelectedTestChog("");
               setScanError("");
+              clearManualTestFlow();
             }}
             placeholder="0x... Enter wallet address"
             autoComplete="off"
@@ -192,7 +227,13 @@ export default function ManualAddressScan() {
                 <button
                   key={chog.tokenId}
                   type="button"
-                  onClick={() => setSelectedTestChog(chog.tokenId)}
+                  onClick={() => {
+                    setSelectedTestChog(chog.tokenId);
+                    writeManualTestFlow({
+                      walletAddress: scanAddress,
+                      selectedTokenId: chog.tokenId,
+                    });
+                  }}
                   aria-pressed={isSelected}
                   className={`group overflow-hidden rounded-2xl border-2 bg-white text-left transition ${
                     isSelected
@@ -227,14 +268,26 @@ export default function ManualAddressScan() {
             })}
           </div>
           {selectedTestChog && (
-            <p
-              className="mt-3 rounded-xl bg-[#eef8ea] px-3 py-2 text-xs leading-5 text-[#447a43]"
-              role="status"
+            <div
+              className="mt-3 rounded-2xl bg-[#eef8ea] p-3"
               data-testid="status-test-chog-selected"
             >
-              Chog #{selectedTestChog} selected for this test. This read-only
-              selection is not connected to a wallet or saved to a profile.
-            </p>
+              <p
+                className="text-xs leading-5 text-[#447a43]"
+                role="status"
+              >
+                Selected for this read-only test. The address is not connected
+                and does not prove control of the wallet.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate("/profile?mode=test")}
+                className="button-primary mt-3 inline-flex min-h-10 items-center justify-center rounded-full px-5 text-xs font-bold"
+                data-testid="button-continue-test-chog"
+              >
+                Continue with Chog #{selectedTestChog}
+              </button>
+            </div>
           )}
         </div>
       )}

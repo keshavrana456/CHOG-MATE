@@ -5,6 +5,7 @@ const OPENSEA_COLLECTION_SLUG = "chog-genesis";
 const CHOG_CONTRACT_ADDRESS = "0xc96d31f8626c6d03fae5dcd3d61e3fb9f4a73763";
 const CHOG_OPENSEA_URL = `https://opensea.io/assets/monad/${CHOG_CONTRACT_ADDRESS}`;
 const MARKETPLACE_CACHE_MS = 60_000;
+const CHOG_IMAGE_CACHE_MS = 10 * 60_000;
 const MON_ETH_PRICE_URL =
   "https://coins.llama.fi/prices/current/coingecko:monad,coingecko:ethereum";
 
@@ -54,6 +55,7 @@ interface TimedValue<T> {
 }
 
 const liveSalesCache = new Map<string, TimedValue<LiveSalesPage>>();
+const chogImageCache = new Map<string, TimedValue<string | null>>();
 let collectionStatsCache: TimedValue<CollectionStats> | null = null;
 
 export class NftIndexerError extends Error {
@@ -124,6 +126,46 @@ export async function getChogCollectionPage(
       ? result.next
       : null,
   };
+}
+
+export async function getOpenSeaChogImage(
+  tokenId: string,
+): Promise<string | null> {
+  if (!process.env.OPENSEA_API_KEY?.trim()) return null;
+  const cached = chogImageCache.get(tokenId);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const url = new URL(
+    `${OPENSEA_API_URL}/chain/monad/contract/${CHOG_CONTRACT_ADDRESS}/nfts/${encodeURIComponent(tokenId)}`,
+  );
+  const payload = await requestOpenSea(url);
+  if (!payload || typeof payload !== "object") {
+    throw new NftIndexerError("OpenSea returned invalid NFT data.", 502);
+  }
+  const result = payload as { nft?: unknown };
+  if (!result.nft || typeof result.nft !== "object") {
+    throw new NftIndexerError("OpenSea returned invalid NFT data.", 502);
+  }
+  const nft = result.nft as Record<string, unknown>;
+  if (
+    typeof nft.contract !== "string" ||
+    nft.contract.toLowerCase() !== CHOG_CONTRACT_ADDRESS.toLowerCase() ||
+    typeof nft.identifier !== "string" ||
+    nft.identifier !== tokenId
+  ) {
+    throw new NftIndexerError("OpenSea returned a different NFT than requested.", 502);
+  }
+
+  const imageUrl = [
+    ...imageGatewayUrls(nft.display_image_url),
+    ...imageGatewayUrls(nft.image_url),
+    ...imageGatewayUrls(nft.original_image_url),
+  ][0] ?? null;
+  chogImageCache.set(tokenId, {
+    value: imageUrl,
+    expiresAt: Date.now() + CHOG_IMAGE_CACHE_MS,
+  });
+  return imageUrl;
 }
 
 export async function getLiveSales(cursor?: string): Promise<LiveSalesPage> {

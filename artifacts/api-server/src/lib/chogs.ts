@@ -6,6 +6,7 @@ import {
   isAddress,
   type Address,
 } from "viem";
+import { getOpenSeaChogImage } from "./opensea";
 
 const DEFAULT_CHOG_CONTRACT_ADDRESS =
   "0xc96d31f8626c6d03fae5dcd3d61e3fb9f4a73763";
@@ -193,15 +194,19 @@ export async function getChog(tokenId: string): Promise<ChogToken | null> {
   const metadataUrl = await tokenMetadataUrl(tokenNumber);
   const metadata = await readTokenMetadata(metadataUrl);
   const traits = mapTraits(metadata);
+  const normalizedTokenId = tokenNumber.toString();
+  const imageUrl =
+    (await getOpenSeaChogImage(normalizedTokenId).catch(() => null)) ??
+    metadataImage(metadata);
   return {
-    tokenId: tokenNumber.toString(),
+    tokenId: normalizedTokenId,
     contractAddress: CHOG_CONTRACT_ADDRESS,
     ownerWallet: owner,
     verified: true,
     name: typeof metadata?.name === "string" ? metadata.name : null,
     description: metadataText(metadata?.description, 2_000),
     tier: metadataTier(metadata, traits),
-    imageUrl: metadataImage(metadata),
+    imageUrl,
     metadataUrl,
     metadata,
     traits,
@@ -260,15 +265,19 @@ async function loadOwnedChogs(walletAddress: Address): Promise<ChogToken[]> {
       ]);
       const metadata = await readTokenMetadata(metadataUrl);
       const traits = mapTraits(metadata);
+      const normalizedTokenId = tokenNumber.toString();
+      const imageUrl =
+        (await getOpenSeaChogImage(normalizedTokenId).catch(() => null)) ??
+        metadataImage(metadata);
       return {
-        tokenId: tokenNumber.toString(),
+        tokenId: normalizedTokenId,
         contractAddress: CHOG_CONTRACT_ADDRESS,
         ownerWallet: walletAddress,
         verified: true,
         name: typeof metadata?.name === "string" ? metadata.name : null,
         description: metadataText(metadata?.description, 2_000),
         tier: metadataTier(metadata, traits),
-        imageUrl: metadataImage(metadata),
+        imageUrl,
         metadataUrl,
         metadata,
         traits,

@@ -8,8 +8,16 @@ import {
   getGetChogQueryKey, getGetMeQueryKey, getGetNftOwnershipQueryKey,
   useGetChog, useGetMe, useGetNftOwnership, useLogoutWallet, useSelectActiveChog, useUpdateMeProfile,
 } from '@workspace/api-client-react';
-import type { Profile, ProfileInput } from '@workspace/api-client-react';
+import type { Chog, Profile, ProfileInput } from '@workspace/api-client-react';
 import { AppShell, ChogArtwork, EmptyState, Eyebrow, PageTitle, QueryState } from '@/components/shared';
+import {
+  emptyManualTestProfileFields,
+  readManualTestFlow,
+  readManualTestProfile,
+  writeManualTestProfile,
+  type ManualTestProfileFields,
+  type ManualTestProfileRecord,
+} from '@/lib/manual-test-profile';
 import { supabase } from '@/lib/supabase';
 
 export function MyChogPage() {
@@ -154,17 +162,36 @@ export function MyChogPage() {
 const tags = (text: string) => text.split(',').map(value=>value.trim()).filter(Boolean);
 const joinTags = (values?: string[]) => values?.join(', ') || '';
 
-function ProfilePreview({profile}:{profile:Profile}) {
+type ProfilePreviewData = Pick<
+  Profile,
+  | 'username'
+  | 'displayName'
+  | 'name'
+  | 'gender'
+  | 'age'
+  | 'bio'
+  | 'location'
+  | 'timezone'
+  | 'interests'
+  | 'hobbies'
+  | 'skills'
+  | 'languages'
+  | 'lookingFor'
+  | 'chog'
+>;
+
+function ProfilePreview({profile,testMode=false}:{profile:ProfilePreviewData;testMode?:boolean}) {
   return <section className="surface overflow-hidden rounded-[28px]" aria-label="Public profile preview" data-testid="profile-preview">
     <div className="grid md:grid-cols-[230px_1fr]">
       <div className="aspect-square bg-[#f4eddf] md:h-full"><ChogArtwork chog={profile.chog}/></div>
       <div className="p-5 sm:p-7">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#eef8ea] px-3 py-2 text-[10px] font-bold uppercase tracking-[.12em] text-[#447a43]"><BadgeCheck size={13}/>Verified Chog holder · #{profile.chog.tokenId}</div>
+        <div className={`mb-3 inline-flex items-center gap-2 rounded-full px-3 py-2 text-[10px] font-bold uppercase tracking-[.12em] ${testMode?'bg-[#fff5da] text-[#79521a]':'bg-[#eef8ea] text-[#447a43]'}`}>{testMode?<Activity size={13}/>:<BadgeCheck size={13}/ >}{testMode?`TEST MODE · Chog #${profile.chog.tokenId}`:`Verified Chog holder · #${profile.chog.tokenId}`}</div>
         <h2 className="display text-3xl font-extrabold text-[#24133f]">{profile.displayName}</h2>
         <p className="mt-1 text-sm text-[#887c90]">@{profile.username}</p>
         <p className="mt-4 text-sm leading-6 text-[#6d6178]">{profile.bio || 'Add an introduction to help other Chog holders get to know you.'}</p>
         <div className="mt-4 grid gap-x-5 gap-y-2 text-xs text-[#796d83] sm:grid-cols-2">
           {profile.name && <p><span className="font-bold text-[#51445f]">Name</span> · {profile.name}</p>}
+          {testMode && profile.age !== null && <p><span className="font-bold text-[#51445f]">Age</span> · {profile.age}</p>}
           {profile.gender && <p><span className="font-bold text-[#51445f]">Gender</span> · {profile.gender}</p>}
           {profile.location && <p><span className="font-bold text-[#51445f]">Location</span> · {profile.location}</p>}
           {profile.timezone && <p><span className="font-bold text-[#51445f]">Timezone</span> · {profile.timezone}</p>}
@@ -179,7 +206,191 @@ function ProfilePreview({profile}:{profile:Profile}) {
   </section>;
 }
 
+function testProfilePreview(
+  fields: ManualTestProfileFields,
+  chog: Chog,
+): ProfilePreviewData {
+  return {
+    username: fields.username,
+    displayName: fields.displayName,
+    name: fields.name || null,
+    gender: fields.gender || null,
+    age: fields.age ? Number(fields.age) : null,
+    bio: fields.bio || null,
+    location: fields.location || null,
+    timezone: fields.timezone || null,
+    interests: tags(fields.interests),
+    hobbies: tags(fields.hobbies),
+    skills: tags(fields.skills),
+    languages: tags(fields.languages),
+    lookingFor: tags(fields.lookingFor),
+    chog,
+  };
+}
+
+function ManualTestProfilePage() {
+  const [flow] = useState(readManualTestFlow);
+  const [record, setRecord] = useState<ManualTestProfileRecord | null>(() =>
+    flow?.selectedTokenId
+      ? readManualTestProfile(flow.walletAddress, flow.selectedTokenId)
+      : null,
+  );
+  const [notice, setNotice] = useState('');
+  const ownership = useGetNftOwnership(flow?.walletAddress ?? '', {
+    query: {
+      enabled: Boolean(flow?.walletAddress && flow.selectedTokenId),
+      queryKey: flow
+        ? [
+            ...getGetNftOwnershipQueryKey(flow.walletAddress),
+            'manual-test-profile',
+            flow.selectedTokenId,
+          ]
+        : ['manual-test-profile', 'no-selected-chog'],
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 0,
+    },
+  });
+  const chog =
+    ownership.data?.verified && flow
+      ? ownership.data.chogs.find(
+          (item) =>
+            item.verified &&
+            item.tokenId === flow.selectedTokenId &&
+            item.ownerWallet.toLowerCase() === flow.walletAddress.toLowerCase(),
+        ) ?? null
+      : null;
+
+  function updateField(key: keyof ManualTestProfileFields, value: string) {
+    if (!record) return;
+    const next = { ...record, draft: { ...record.draft, [key]: value } };
+    setRecord(next);
+    setNotice('');
+    try {
+      writeManualTestProfile(next);
+    } catch {
+      setNotice('This browser could not save the test draft locally.');
+    }
+  }
+
+  function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNotice('');
+    if (!record || !flow || !chog) {
+      setNotice('The selected Chog could not be verified again. Return to the scan and choose a current Chog.');
+      return;
+    }
+    const fields = record.draft;
+    if (!fields.displayName.trim()) {
+      setNotice('Add a display name to continue.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]{2,24}$/.test(fields.username.trim())) {
+      setNotice('Use a username with 2–24 letters, numbers, or underscores.');
+      return;
+    }
+    const age = fields.age.trim() ? Number(fields.age) : null;
+    if (age !== null && (!Number.isInteger(age) || age < 18 || age > 120)) {
+      setNotice('Age must be a whole number from 18 to 120, or left blank.');
+      return;
+    }
+    if (!tags(fields.lookingFor).length) {
+      setNotice('Add at least one connection type under Looking For.');
+      return;
+    }
+    const savedFields = { ...fields, displayName: fields.displayName.trim(), username: fields.username.trim() };
+    const next = { ...record, draft: savedFields, saved: savedFields };
+    try {
+      writeManualTestProfile(next);
+      setRecord(next);
+      setNotice('Test profile saved in this browser.');
+    } catch {
+      setNotice('This browser could not save the test profile. Check browser storage settings and try again.');
+    }
+  }
+
+  return <AppShell>
+    <div className="page-enter">
+      <PageTitle
+        eyebrow="Read-only wallet test"
+        title="Create your profile."
+        description="Use the selected Chog to preview the existing profile flow. This test profile is not published."
+        action={<Link href="/" className="button-soft inline-flex items-center rounded-full px-4 py-2.5 text-xs font-bold" data-testid="link-test-profile-back-to-scan">Back to scan</Link>}
+      />
+      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[#e7c98b] bg-[#fff8e8] px-4 py-3 text-xs leading-5 text-[#79521a]" data-testid="notice-test-profile-local-only">
+        <span className="rounded-full bg-[#f5e5bb] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[.12em]">TEST MODE</span>
+        <span>Address-only ownership check. Not connected or authenticated; profile data is saved only in this browser and is not visible to other users.</span>
+      </div>
+      {!flow || !flow.selectedTokenId ? (
+        <EmptyState
+          title="Choose a Chog to continue."
+          detail="Return to the wallet scan, scan a valid address, then select one of its verified Chogs."
+          action={<Link href="/" className="button-primary inline-flex rounded-full px-5 py-3 text-xs font-bold">Return to scan</Link>}
+        />
+      ) : ownership.isLoading ? (
+        <p className="surface rounded-2xl px-5 py-4 text-sm text-[#766a80]" role="status">Rechecking Chog ownership before opening the test profile…</p>
+      ) : ownership.isError ? (
+        <div className="surface rounded-2xl p-5" role="alert">
+          <p className="text-sm text-[#914c3c]">The selected Chog could not be rechecked. No profile data was submitted.</p>
+          <button type="button" onClick={() => void ownership.refetch()} className="button-primary mt-4 rounded-full px-5 py-3 text-xs font-bold">Try again</button>
+        </div>
+      ) : !chog ? (
+        <EmptyState
+          title="No Chog Found"
+          detail="The selected token is no longer verified as owned by this address. Return to the scan and choose a current Chog."
+          action={<Link href="/" className="button-primary inline-flex rounded-full px-5 py-3 text-xs font-bold">Return to scan</Link>}
+        />
+      ) : record ? (
+        <div className="space-y-5">
+          {record.saved && <ProfilePreview profile={testProfilePreview(record.saved, chog)} testMode />}
+          <form id="edit-profile" onSubmit={save} className="grid scroll-mt-24 gap-6 lg:grid-cols-[1fr_330px]">
+            <section className="surface rounded-[28px] p-5 sm:p-8">
+              <div className="mb-5">
+                <Eyebrow>CREATE YOUR PROFILE · TEST MODE</Eyebrow>
+                <h2 className="display mt-1 text-2xl font-extrabold text-[#24133f]">Tell them a little more.</h2>
+              </div>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="Display name" value={record.draft.displayName} onChange={value=>updateField('displayName',value)} placeholder="How people will meet you" maxLength={48} testId="input-display-name"/>
+                <Field label="Username" value={record.draft.username} onChange={value=>updateField('username',value.replace(/[^a-zA-Z0-9_]/g,''))} placeholder="Your public handle" maxLength={24} prefix="@" testId="input-username"/>
+                <Field label="Name" value={record.draft.name} onChange={value=>updateField('name',value)} placeholder="Name shown on your profile" maxLength={80} testId="input-profile-name"/>
+                <label><span className="mb-2 block text-xs font-bold text-[#5c5067]">Age <span className="font-normal text-[#958a9b]">(optional)</span></span><input className="field" type="number" min="18" max="120" step="1" inputMode="numeric" value={record.draft.age} onChange={event=>updateField('age',event.target.value)} placeholder="18+" data-testid="input-profile-age"/><span className="mt-1 block text-[10px] text-[#9b8fa0]">If entered, use a whole number from 18 to 120.</span></label>
+                <Field label="Gender" value={record.draft.gender} onChange={value=>updateField('gender',value)} placeholder="Optional" maxLength={50} testId="input-profile-gender"/>
+                <label className="sm:col-span-2"><span className="mb-2 block text-xs font-bold text-[#5c5067]">Your introduction</span><textarea value={record.draft.bio} onChange={event=>updateField('bio',event.target.value)} maxLength={500} rows={4} className="field resize-y" placeholder="A little about what lights you up…" data-testid="input-bio"/><span className="mt-1 block text-right text-[10px] text-[#9c91a1]">{record.draft.bio.length}/500</span></label>
+                <Field label="Location" value={record.draft.location} onChange={value=>updateField('location',value)} placeholder="City, region" maxLength={100} testId="input-location"/>
+                <Field label="Timezone" value={record.draft.timezone} onChange={value=>updateField('timezone',value)} placeholder="e.g. UTC−5" maxLength={100} testId="input-timezone"/>
+                <TagField label="Interests" value={record.draft.interests} onChange={value=>updateField('interests',value)} placeholder="Art, climbing, long reads" testId="input-interests"/>
+                <TagField label="Hobbies" value={record.draft.hobbies} onChange={value=>updateField('hobbies',value)} placeholder="Hiking, cooking, photography" testId="input-hobbies"/>
+                <TagField label="Skills" value={record.draft.skills} onChange={value=>updateField('skills',value)} placeholder="Design, writing, Solidity" testId="input-skills"/>
+                <TagField label="Languages" value={record.draft.languages} onChange={value=>updateField('languages',value)} placeholder="English, Hindi, Spanish" testId="input-languages"/>
+                <TagField label="What are you looking for?" value={record.draft.lookingFor} onChange={value=>updateField('lookingFor',value)} placeholder="Dates, friends, collaborators" testId="input-looking-for"/>
+              </div>
+              {notice && <p className={`mt-5 rounded-2xl px-4 py-3 text-sm ${notice.startsWith('Test profile saved')?'bg-[#eef8ea] text-[#447a43]':'bg-[#fff2ec] text-[#914c3c]'}`} role="status" data-testid="status-profile-save">{notice}</p>}
+              <div className="mt-6 flex flex-col-reverse justify-between gap-4 border-t border-[#24133f10] pt-5 sm:flex-row sm:items-center">
+                <p className="text-xs leading-5 text-[#908498]">This creates a local test preview only. It does not create an account, connect the scanned address, or publish your profile.</p>
+                <button type="submit" className="button-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-bold" data-testid="button-save-profile"><Save size={16}/>Save profile</button>
+              </div>
+            </section>
+            <aside className="surface h-fit rounded-[28px] p-5 sm:p-6">
+              <Eyebrow>Selected test NFT</Eyebrow>
+              <h2 className="display mt-1 text-2xl font-extrabold text-[#24133f]">Chog #{chog.tokenId}</h2>
+              <div className="mt-4 aspect-square overflow-hidden rounded-2xl bg-[#f4eddf]"><ChogArtwork chog={chog}/></div>
+              <p className="mt-4 break-all text-[10px] leading-5 text-[#82778c]">Scanned address: {flow.walletAddress}</p>
+              <p className="mt-3 text-[11px] leading-5 text-[#998ea0]">The NFT image and token ID come from the verified Chog record. Ownership of the address is not proof that you control it.</p>
+            </aside>
+          </form>
+        </div>
+      ) : null}
+    </div>
+  </AppShell>;
+}
+
 export function ProfilePage() {
+  return new URLSearchParams(window.location.search).get('mode') === 'test'
+    ? <ManualTestProfilePage />
+    : <ConnectedProfilePage />;
+}
+
+function ConnectedProfilePage() {
   const me = useGetMe({ query: { queryKey: getGetMeQueryKey(), refetchOnWindowFocus: true } });
   const profile = me.data?.profile;
   const [username,setUsername] = useState('');
