@@ -269,6 +269,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SwipeResult"
+  /likes/inbox:
+    get:
+      operationId: getLikeInbox
+      tags: [matching]
+      summary: List incoming likes and paid Super Likes
+      responses:
+        "200":
+          description: Incoming likes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LikeInboxItem"
   /matches:
     get:
       operationId: getMatches
@@ -607,6 +621,7 @@ components:
       properties:
         targetUserId: { type: string, format: uuid }
         action: { type: string, enum: [pass, like, super_like] }
+        transactionHash: { type: string, pattern: "^0x[a-fA-F0-9]{64}$" }
     SwipeResult:
       type: object
       required: [recorded, matched]
@@ -614,6 +629,14 @@ components:
         recorded: { type: boolean }
         matched: { type: boolean }
         match: { oneOf: [{ $ref: "#/components/schemas/Match" }, { type: "null" }] }
+    LikeInboxItem:
+      type: object
+      required: [id, type, createdAt, profile]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [like, super_like] }
+        createdAt: { type: string, format: date-time }
+        profile: { $ref: "#/components/schemas/Profile" }
     Match:
       type: object
       required: [id, profile, compatibility, createdAt]
@@ -673,6 +696,6 @@ components:
       required: [targetUserId, reason]
       properties:
         targetUserId: { type: string, format: uuid }
-        reason: { type: string, enum: [spam, harassment, fake_profile, scam, other] }
+        reason: { type: string, enum: [spam, harassment, fake_profile, inappropriate_content, scam, other] }
         details: { type: ["string", "null"], maxLength: 1000 }
 

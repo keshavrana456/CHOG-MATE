@@ -10,4 +10,6 @@ import type { SwipeInputAction } from './swipeInputAction';
 export interface SwipeInput {
   targetUserId: string;
   action: SwipeInputAction;
+  /** @pattern ^0x[a-fA-F0-9]{64}$ */
+  transactionHash?: string;
 }

@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import {
   BlockProfileBody,
+  GetLikeInboxResponse,
   GetMatchesResponse,
   GetMessagesParams,
   GetMessagesResponse,
@@ -19,6 +20,10 @@ import {
 import { getAddress } from "viem";
 import { calculateCompatibility } from "../lib/compatibility";
 import { isCurrentChogOwner } from "../lib/chogs";
+import {
+  TokenTransferVerificationError,
+  verifySuperLikeTransfer,
+} from "../lib/chog-token";
 import {
   loadProfileBundle,
   loadProfileBundles,
@@ -85,6 +90,18 @@ router.post("/swipes", async (req, res): Promise<void> => {
   try {
     const current = await requireEligibleProfile(session);
     const targetId = parsed.data.targetUserId;
+    const transactionHash = parsed.data.transactionHash;
+    if (
+      (parsed.data.action === "super_like" && !transactionHash) ||
+      (parsed.data.action !== "super_like" && transactionHash)
+    ) {
+      res.status(400).json({
+        error: parsed.data.action === "super_like"
+          ? "A confirmed $CHOG transfer is required for a Super Like."
+          : "A token transaction is only valid for a Super Like.",
+      });
+      return;
+    }
     if (targetId === session.userId) {
       res.status(400).json({ error: "You can't swipe on your own profile." });
       return;
@@ -128,6 +145,13 @@ router.post("/swipes", async (req, res): Promise<void> => {
       res.status(404).json({ error: "This profile is no longer available." });
       return;
     }
+    if (parsed.data.action === "super_like") {
+      await verifySuperLikeTransfer(
+        transactionHash!,
+        session.walletAddress,
+        target.user.wallet_address,
+      );
+    }
 
     const compatibility = calculateCompatibility(
       {
@@ -152,6 +176,7 @@ router.post("/swipes", async (req, res): Promise<void> => {
       p_to_user_id: targetId,
       p_action: parsed.data.action,
       p_compatibility: compatibility.score,
+      p_transaction_hash: transactionHash?.toLowerCase() ?? null,
     });
     if (error) throw new SocialDataError("CHOG MATE matching is not ready yet.");
 
@@ -179,11 +204,102 @@ router.post("/swipes", async (req, res): Promise<void> => {
 
     res.json(
       SwipeProfileResponse.parse({
-        recorded: true,
+        recorded: Boolean((data as { recorded?: boolean } | null)?.recorded ?? true),
         matched,
         ...(matched ? { match } : {}),
       }),
     );
+  } catch (error) {
+    sendSocialError(req, res, error);
+  }
+});
+
+router.get("/likes/inbox", async (req, res): Promise<void> => {
+  const session = requireWalletSession(req, res);
+  if (!session) return;
+
+  try {
+    await requireEligibleProfile(session);
+    const admin = getSupabaseAdmin();
+    const [likes, superLikes, blocksFrom, blocksTo, matchesA, matchesB] =
+      await Promise.all([
+        admin.from("likes").select("id,from_user_id,created_at").eq("to_user_id", session.userId),
+        admin
+          .from("super_likes")
+          .select("id,from_user_id,created_at")
+          .eq("to_user_id", session.userId)
+          .not("transaction_hash", "is", null),
+        admin.from("blocks").select("blocked_user_id").eq("blocker_id", session.userId),
+        admin.from("blocks").select("blocker_id").eq("blocked_user_id", session.userId),
+        admin
+          .from("matches")
+          .select("user_b")
+          .eq("user_a", session.userId)
+          .eq("status", "active"),
+        admin
+          .from("matches")
+          .select("user_a")
+          .eq("user_b", session.userId)
+          .eq("status", "active"),
+      ]);
+    if ([likes, superLikes, blocksFrom, blocksTo, matchesA, matchesB].some((item) => item.error)) {
+      throw new SocialDataError("CHOG MATE likes are not ready yet.");
+    }
+
+    const excluded = new Set<string>([session.userId]);
+    for (const row of blocksFrom.data ?? []) excluded.add(row.blocked_user_id);
+    for (const row of blocksTo.data ?? []) excluded.add(row.blocker_id);
+    for (const row of matchesA.data ?? []) excluded.add(row.user_b);
+    for (const row of matchesB.data ?? []) excluded.add(row.user_a);
+
+    const bySender = new Map<string, {
+      id: string;
+      type: "like" | "super_like";
+      createdAt: string;
+    }>();
+    for (const row of likes.data ?? []) {
+      if (!excluded.has(row.from_user_id)) {
+        bySender.set(row.from_user_id, {
+          id: row.id,
+          type: "like",
+          createdAt: row.created_at,
+        });
+      }
+    }
+    for (const row of superLikes.data ?? []) {
+      if (!excluded.has(row.from_user_id)) {
+        bySender.set(row.from_user_id, {
+          id: row.id,
+          type: "super_like",
+          createdAt: row.created_at,
+        });
+      }
+    }
+
+    const senderIds = [...bySender.keys()];
+    const bundles = await loadProfileBundles(senderIds);
+    const inbox = [];
+    for (const [senderId, like] of bySender) {
+      const bundle = bundles.get(senderId);
+      if (!bundle) continue;
+      const owns = await isCurrentChogOwner(
+        getAddress(bundle.user.wallet_address),
+        bundle.chog.tokenId,
+      );
+      if (owns === null) {
+        res.status(503).json({ error: "Ownership checks are temporarily unavailable." });
+        return;
+      }
+      if (!owns) continue;
+      inbox.push({
+        id: like.id,
+        type: like.type,
+        createdAt: like.createdAt,
+        profile: profileToApi(bundle),
+      });
+    }
+    inbox.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    res.json(GetLikeInboxResponse.parse(inbox));
   } catch (error) {
     sendSocialError(req, res, error);
   }
@@ -599,6 +715,10 @@ async function getActiveMatch(matchId: string, userId: string): Promise<MatchRow
 }
 
 function sendSocialError(req: Request, res: Response, error: unknown): void {
+  if (error instanceof TokenTransferVerificationError) {
+    res.status(error.status).json({ error: error.message });
+    return;
+  }
   if (error instanceof EligibilityError) {
     res.status(error.status).json({ error: error.message });
     return;

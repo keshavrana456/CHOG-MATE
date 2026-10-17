@@ -269,6 +269,8 @@ export const SwipeInputAction = {
 export interface SwipeInput {
   targetUserId: string;
   action: SwipeInputAction;
+  /** @pattern ^0x[a-fA-F0-9]{64}$ */
+  transactionHash?: string;
 }
 
 export interface Match {
@@ -290,6 +292,21 @@ export interface SwipeResult {
   recorded: boolean;
   matched: boolean;
   match?: Match | null;
+}
+
+export type LikeInboxItemType = typeof LikeInboxItemType[keyof typeof LikeInboxItemType];
+
+
+export const LikeInboxItemType = {
+  like: 'like',
+  super_like: 'super_like',
+} as const;
+
+export interface LikeInboxItem {
+  id: string;
+  type: LikeInboxItemType;
+  createdAt: string;
+  profile: Profile;
 }
 
 export type MessageMessageType = typeof MessageMessageType[keyof typeof MessageMessageType];
@@ -396,6 +413,7 @@ export const ReportInputReason = {
   spam: 'spam',
   harassment: 'harassment',
   fake_profile: 'fake_profile',
+  inappropriate_content: 'inappropriate_content',
   scam: 'scam',
   other: 'other',
 } as const;

@@ -30,6 +30,7 @@ import type {
   DiscoveryPage,
   GetLiveSalesParams,
   HealthStatus,
+  LikeInboxItem,
   LiveSales,
   Match,
   Message,
@@ -1141,6 +1142,83 @@ export const useSwipeProfile = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getSwipeProfileMutationOptions(options));
     }
+
+export const getGetLikeInboxUrl = () => {
+
+
+
+
+  return `/api/likes/inbox`
+}
+
+/**
+ * @summary List incoming likes and paid Super Likes
+ */
+export const getLikeInbox = async ( options?: Parameters<typeof customFetch>[1]): Promise<LikeInboxItem[]> => {
+
+  return customFetch<LikeInboxItem[]>(getGetLikeInboxUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLikeInboxQueryKey = () => {
+    return [
+    `/api/likes/inbox`
+    ] as const;
+    }
+
+
+export const getGetLikeInboxQueryOptions = <TData = Awaited<ReturnType<typeof getLikeInbox>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLikeInbox>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLikeInboxQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLikeInbox>>> = ({ signal }) => getLikeInbox({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLikeInbox>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLikeInboxQueryResult = NonNullable<Awaited<ReturnType<typeof getLikeInbox>>>
+export type GetLikeInboxQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List incoming likes and paid Super Likes
+ */
+
+export function useGetLikeInbox<TData = Awaited<ReturnType<typeof getLikeInbox>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLikeInbox>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLikeInboxQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetMatchesUrl = () => {
 

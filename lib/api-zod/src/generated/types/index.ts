@@ -17,6 +17,8 @@ export * from './discoverProfilesParams';
 export * from './discoveryPage';
 export * from './getLiveSalesParams';
 export * from './healthStatus';
+export * from './likeInboxItem';
+export * from './likeInboxItemType';
 export * from './liveSale';
 export * from './liveSales';
 export * from './match';

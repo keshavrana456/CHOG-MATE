@@ -13,6 +13,7 @@ export const ReportInputReason = {
   spam: 'spam',
   harassment: 'harassment',
   fake_profile: 'fake_profile',
+  inappropriate_content: 'inappropriate_content',
   scam: 'scam',
   other: 'other',
 } as const;

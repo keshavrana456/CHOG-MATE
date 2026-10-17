@@ -473,9 +473,13 @@ export const DiscoverProfilesResponse = zod.object({
 /**
  * @summary Pass, like, or super-like a discoverable profile
  */
+export const swipeProfileBodyTransactionHashRegExp = new RegExp('^0x[a-fA-F0-9]{64}$');
+
+
 export const SwipeProfileBody = zod.object({
   "targetUserId": zod.string().uuid(),
-  "action": zod.enum(['pass', 'like', 'super_like'])
+  "action": zod.enum(['pass', 'like', 'super_like']),
+  "transactionHash": zod.string().regex(swipeProfileBodyTransactionHashRegExp).optional()
 })
 
 export const swipeProfileResponseMatchOneProfileAgeMin = 18;
@@ -543,6 +547,66 @@ export const SwipeProfileResponse = zod.object({
   "unreadCount": zod.number().int().min(swipeProfileResponseMatchOneUnreadCountMin).optional()
 }),zod.null()]).optional()
 })
+
+
+/**
+ * @summary List incoming likes and paid Super Likes
+ */
+export const getLikeInboxResponseProfileAgeMin = 18;
+export const getLikeInboxResponseProfileAgeMax = 120;
+
+export const getLikeInboxResponseProfilePhotoUrlMax = 2048;
+
+export const getLikeInboxResponseProfileChogTraitsItemRarityMin = 0;
+export const getLikeInboxResponseProfileChogTraitsItemRarityMax = 100;
+
+export const getLikeInboxResponseProfileCompatibilityMin = 0;
+export const getLikeInboxResponseProfileCompatibilityMax = 100;
+
+
+
+export const GetLikeInboxResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "type": zod.enum(['like', 'super_like']),
+  "createdAt": zod.coerce.date(),
+  "profile": zod.object({
+  "userId": zod.string().uuid(),
+  "username": zod.string(),
+  "displayName": zod.string(),
+  "name": zod.string().nullable(),
+  "gender": zod.string().nullable(),
+  "age": zod.number().int().min(getLikeInboxResponseProfileAgeMin).max(getLikeInboxResponseProfileAgeMax).nullable(),
+  "walletAddress": zod.string(),
+  "photoUrl": zod.string().url().max(getLikeInboxResponseProfilePhotoUrlMax).nullable(),
+  "bio": zod.string().nullish(),
+  "location": zod.string().nullish(),
+  "timezone": zod.string().nullish(),
+  "interests": zod.array(zod.string()),
+  "hobbies": zod.array(zod.string()),
+  "skills": zod.array(zod.string()),
+  "languages": zod.array(zod.string()),
+  "lookingFor": zod.array(zod.string()),
+  "chog": zod.object({
+  "tokenId": zod.string(),
+  "contractAddress": zod.string(),
+  "ownerWallet": zod.string(),
+  "verified": zod.boolean(),
+  "name": zod.string().nullish(),
+  "description": zod.string().nullable(),
+  "tier": zod.string().nullable(),
+  "imageUrl": zod.string().url().nullish(),
+  "metadataUrl": zod.string().url().nullish(),
+  "traits": zod.array(zod.object({
+  "traitType": zod.string(),
+  "traitValue": zod.string(),
+  "rarity": zod.number().min(getLikeInboxResponseProfileChogTraitsItemRarityMin).max(getLikeInboxResponseProfileChogTraitsItemRarityMax).nullish()
+})).optional()
+}),
+  "compatibility": zod.number().int().min(getLikeInboxResponseProfileCompatibilityMin).max(getLikeInboxResponseProfileCompatibilityMax).nullish(),
+  "whyYouMatch": zod.array(zod.string()).optional()
+})
+})
+export const GetLikeInboxResponse = zod.array(GetLikeInboxResponseItem)
 
 
 /**
@@ -734,7 +798,7 @@ export const reportProfileBodyDetailsMax = 1000;
 
 export const ReportProfileBody = zod.object({
   "targetUserId": zod.string().uuid(),
-  "reason": zod.enum(['spam', 'harassment', 'fake_profile', 'scam', 'other']),
+  "reason": zod.enum(['spam', 'harassment', 'fake_profile', 'inappropriate_content', 'scam', 'other']),
   "details": zod.string().max(reportProfileBodyDetailsMax).nullish()
 })
 

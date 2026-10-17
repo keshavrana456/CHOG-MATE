@@ -4,14 +4,19 @@ import { ArrowRight, BadgeCheck, FileText, Heart, Image as ImageIcon, MessageCir
 import { Link } from 'wouter';
 import {
   getDiscoverProfilesQueryKey, getGetMatchesQueryKey, getGetMessagesQueryKey,
-  getGetMeQueryKey,
+  getGetMeQueryKey, getGetLikeInboxQueryKey,
   useBlockProfile, useDiscoverProfiles, useGetMatches, useGetMessages,
-  useGetMe, useReportProfile, useRequestMessageAttachmentUploadUrl, useSendMessage, useUnmatchProfile,
+  useGetLikeInbox, useGetMe, useReportProfile, useRequestMessageAttachmentUploadUrl, useSendMessage, useSwipeProfile, useUnmatchProfile,
 } from '@workspace/api-client-react';
 import { type DiscoverProfilesMode, type DiscoverProfilesParams, type Profile, ReportInputReason } from '@workspace/api-client-react';
+import { formatUnits, type Hex } from 'viem';
+import { useConnection, usePublicClient, useReadContract, useWriteContract } from 'wagmi';
 import { AppShell, ChogArtwork, EmptyState, Eyebrow, PageTitle, ProfileAvatar, QueryState } from '@/components/shared';
 import { WalletConnectionDialog } from '@/components/wallet-connection-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { appConfig } from '@/lib/config';
+import { monadNetwork } from '@/lib/appkit';
+import { readManualTestFlow } from '@/lib/manual-test-profile';
 import { supabase } from '@/lib/supabase';
 
 function ReportControl({
@@ -159,6 +164,243 @@ function ProfileDetailsDialog({
       </div>
     </DialogContent>
   </Dialog>;
+}
+
+const chogTokenAbi = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'decimals',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+  {
+    type: 'function',
+    name: 'transfer',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const;
+
+function SuperLikeDialog({
+  profile,
+  walletAddress,
+  onOpenChange,
+  onConfirmed,
+}: {
+  profile: Profile | null;
+  walletAddress: string | null;
+  onOpenChange: (open: boolean) => void;
+  onConfirmed: (transactionHash: Hex) => Promise<void>;
+}) {
+  const connection = useConnection();
+  const publicClient = usePublicClient({ chainId: monadNetwork.id });
+  const { writeContractAsync, isPending: walletPending } = useWriteContract();
+  const [transactionHash, setTransactionHash] = useState<Hex | null>(null);
+  const [phase, setPhase] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const manualTestMode = Boolean(readManualTestFlow());
+  const walletMatchesSession = Boolean(
+    connection.address &&
+    walletAddress &&
+    connection.address.toLowerCase() === walletAddress.toLowerCase(),
+  );
+  const canUseWallet = Boolean(
+    connection.isConnected &&
+    connection.chainId === monadNetwork.id &&
+    walletMatchesSession &&
+    !manualTestMode,
+  );
+  const decimals = useReadContract({
+    address: appConfig.chogTokenAddress,
+    abi: chogTokenAbi,
+    functionName: 'decimals',
+    chainId: monadNetwork.id,
+    query: { enabled: canUseWallet, staleTime: 60 * 60 * 1000 },
+  });
+  const balance = useReadContract({
+    address: appConfig.chogTokenAddress,
+    abi: chogTokenAbi,
+    functionName: 'balanceOf',
+    args: connection.address ? [connection.address] : undefined,
+    chainId: monadNetwork.id,
+    query: { enabled: Boolean(canUseWallet && connection.address), refetchOnWindowFocus: true },
+  });
+  const amount = decimals.data === undefined
+    ? null
+    : 100n * (10n ** BigInt(decimals.data));
+  const balanceText = balance.data !== undefined && decimals.data !== undefined
+    ? formatTokenAmount(balance.data, decimals.data)
+    : null;
+  const insufficient = amount !== null && balance.data !== undefined && balance.data < amount;
+
+  useEffect(() => {
+    setTransactionHash(null);
+    setPhase('');
+    setError('');
+    setSaving(false);
+  }, [profile?.userId]);
+
+  async function recordConfirmedTransfer(hash: Hex) {
+    setSaving(true);
+    setError('');
+    setPhase('Saving the confirmed Super Like…');
+    try {
+      await onConfirmed(hash);
+      setPhase('Super Like sent.');
+      onOpenChange(false);
+    } catch {
+      setPhase('');
+      setError('The transfer is confirmed, but the Super Like could not be saved. Retry saving this same transaction; do not send another payment.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmSuperLike() {
+    setError('');
+    if (!profile) return;
+    if (transactionHash) {
+      await recordConfirmedTransfer(transactionHash);
+      return;
+    }
+    if (!canUseWallet || !connection.address || !walletMatchesSession || manualTestMode) {
+      setError('Connect the wallet used for this verified profile on Monad Mainnet. Manual test addresses cannot send transactions.');
+      return;
+    }
+    if (!publicClient || decimals.isLoading || balance.isLoading) {
+      setError('Checking your current $CHOG balance. Please wait and try again.');
+      return;
+    }
+    if (decimals.isError || balance.isError || amount === null || balance.data === undefined) {
+      setError('The live $CHOG balance could not be read. No transaction was sent.');
+      return;
+    }
+    if (insufficient) {
+      setError('Your connected wallet does not have enough $CHOG for this Super Like.');
+      return;
+    }
+
+    try {
+      setPhase('Confirm the transfer in your wallet…');
+      const hash = await writeContractAsync({
+        address: appConfig.chogTokenAddress,
+        abi: chogTokenAbi,
+        functionName: 'transfer',
+        args: [profile.walletAddress as `0x${string}`, amount],
+        chainId: monadNetwork.id,
+      });
+      setTransactionHash(hash);
+      setPhase('Waiting for Monad confirmation…');
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash,
+        confirmations: 1,
+      });
+      if (receipt.status !== 'success') {
+        setPhase('');
+        setError('The $CHOG transfer failed on Monad. No Super Like was saved.');
+        return;
+      }
+      await balance.refetch();
+      await recordConfirmedTransfer(hash);
+    } catch (caught) {
+      setPhase('');
+      if (transactionHash) {
+        setError(caught instanceof Error ? caught.message : 'The transaction did not confirm. No Super Like was saved.');
+      } else {
+        setError(caught instanceof Error ? caught.message : 'The wallet rejected or failed the transfer. No Super Like was saved.');
+      }
+    }
+  }
+
+  return (
+    <Dialog
+      open={Boolean(profile)}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && transactionHash && !phase.includes('sent')) {
+          setError('Save the confirmed transaction before closing this window.');
+          return;
+        }
+        if (!nextOpen) onOpenChange(false);
+      }}
+    >
+      <DialogContent className="surface max-w-md rounded-[28px] border-[#e8dfd5] bg-[#fffaf6]">
+        <DialogHeader>
+          <div className="mb-2 grid h-12 w-12 place-items-center rounded-2xl bg-[#f2ecff] text-[#7851d9]">
+            <Sparkles size={21} />
+          </div>
+          <DialogTitle className="display text-2xl font-extrabold text-[#24133f]">
+            Send a Super Like?
+          </DialogTitle>
+          <DialogDescription className="text-sm leading-6 text-[#82778c]">
+            Transfer 100 $CHOG to {profile ? `@${profile.username}` : 'this holder'} on Monad.
+            This is a real, irreversible token transfer. A Super Like gives both people direct message access but does not create a Match.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="rounded-2xl border border-[#eadfe0] bg-white/70 px-4 py-3 text-sm text-[#594d64]">
+          <p className="flex items-center justify-between gap-3">
+            <span>Live balance</span>
+            <strong className="tabular-nums">{balanceText === null ? (balance.isLoading || decimals.isLoading ? 'Loading…' : 'Unavailable') : `${balanceText} $CHOG`}</strong>
+          </p>
+          {profile && <p className="mt-2 break-all text-[10px] leading-4 text-[#978a9b]">Recipient · {profile.walletAddress}</p>}
+        </div>
+        {!connection.isConnected && <p className="text-xs leading-5 text-[#8b8091]">Connect the wallet used for your CHOG MATE profile to continue.</p>}
+        {connection.isConnected && connection.chainId !== monadNetwork.id && <p className="text-xs text-[#a34646]" role="alert">Switch your wallet to Monad Mainnet before sending.</p>}
+        {manualTestMode && <p className="text-xs leading-5 text-[#a34646]" role="alert">Manual address test mode cannot send real token transactions.</p>}
+        {phase && <p className="text-xs font-semibold text-[#7053a4]" role="status">{phase}</p>}
+        {transactionHash && (
+          <a href={`https://monadscan.com/tx/${transactionHash}`} target="_blank" rel="noreferrer" className="break-all text-xs font-semibold text-[#7047ff] underline">
+            View transaction · {transactionHash}
+          </a>
+        )}
+        {error && <p className="rounded-xl bg-[#fff0ee] px-3 py-2 text-xs leading-5 text-[#a34646]" role="alert">{error}</p>}
+        <button
+          type="button"
+          onClick={() => void confirmSuperLike()}
+          disabled={walletPending || saving || !profile || (amount !== null && insufficient)}
+          className="button-primary w-full rounded-full px-5 py-3 text-sm font-bold disabled:opacity-50"
+          data-testid="button-confirm-super-like"
+        >
+          {walletPending
+            ? 'Confirm in your wallet…'
+            : saving || phase.includes('Waiting')
+              ? 'Waiting for confirmation…'
+              : transactionHash
+                ? 'Retry saving Super Like'
+                : 'Send 100 $CHOG'}
+        </button>
+        {!transactionHash && (
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            disabled={walletPending || saving}
+            className="w-full rounded-full px-4 py-2 text-xs font-semibold text-[#81758a] hover:bg-[#f5f0ff] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function formatTokenAmount(value: bigint, decimals: number): string {
+  const [whole = '0', fraction = ''] = formatUnits(value, decimals).split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const trimmedFraction = fraction.slice(0, 4).replace(/0+$/, '');
+  return trimmedFraction ? `${grouped}.${trimmedFraction}` : grouped;
 }
 
 export function DiscoverPage() {

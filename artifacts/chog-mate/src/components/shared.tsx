@@ -2,6 +2,8 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { BadgeCheck, Compass, Heart, House, Image, MessageCircle, Settings, UserRound } from 'lucide-react';
 import type { Chog, Profile } from '@workspace/api-client-react';
+import { ChogBalance } from '@/components/chog-balance';
+import { NotificationCenter } from '@/components/notification-center';
 
 export function Brand({ inverse = false }: { inverse?: boolean }) {
   return <Link href="/" className="inline-flex items-center gap-3" data-testid="link-brand">
@@ -56,6 +58,8 @@ export function AppShell({ children, displayName }: { children: ReactNode; displ
           {links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} data-testid={`link-nav-${label.toLowerCase().replace(' ', '-')}`} className={`nav-link flex items-center gap-1.5 rounded-full px-2 py-2 text-[11px] font-semibold lg:gap-2 lg:px-2.5 lg:text-xs xl:px-3 xl:text-[13px] ${path === href ? 'active' : ''}`}><Icon size={14} strokeWidth={2.2} />{label}</Link>)}
         </nav>
         <div className="flex items-center gap-2">
+          <ChogBalance />
+          <NotificationCenter />
           <Link href="/settings" className="glass-icon-button grid h-10 w-10 place-items-center rounded-full transition" aria-label="Settings" aria-current={path === '/settings' ? 'page' : undefined} data-testid="link-settings"><Settings size={16}/></Link>
         </div>
       </div>
