@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Activity, BadgeCheck, Check, ChevronDown, ExternalLink, Eye, LockKeyhole, LogOut, Save, ShieldCheck, Wallet } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { Activity, BadgeCheck, Check, ChevronDown, ExternalLink, Eye, EyeOff, Globe2, Heart, LockKeyhole, LogOut, MapPin, Save, ShieldCheck, Sparkles, Wallet } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { isAddress } from 'viem';
 import { useConnection, useDisconnect } from 'wagmi';
@@ -10,6 +11,7 @@ import {
 } from '@workspace/api-client-react';
 import type { Chog, Profile, ProfileInput } from '@workspace/api-client-react';
 import { AppShell, ChogArtwork, EmptyState, Eyebrow, PageTitle, QueryState } from '@/components/shared';
+import { Form } from '@/components/ui/form';
 import {
   emptyManualTestProfileFields,
   readManualTestFlow,
@@ -181,29 +183,76 @@ type ProfilePreviewData = Pick<
 >;
 
 function ProfilePreview({profile,testMode=false}:{profile:ProfilePreviewData;testMode?:boolean}) {
-  return <section className="surface overflow-hidden rounded-[28px]" aria-label="Public profile preview" data-testid="profile-preview">
-    <div className="grid md:grid-cols-[230px_1fr]">
-      <div className="aspect-square bg-[#f4eddf] md:h-full"><ChogArtwork chog={profile.chog}/></div>
-      <div className="p-5 sm:p-7">
-        <div className={`mb-3 inline-flex items-center gap-2 rounded-full px-3 py-2 text-[10px] font-bold uppercase tracking-[.12em] ${testMode?'bg-[#fff5da] text-[#79521a]':'bg-[#eef8ea] text-[#447a43]'}`}>{testMode?<Activity size={13}/>:<BadgeCheck size={13}/ >}{testMode?`TEST MODE · Chog #${profile.chog.tokenId}`:`Verified Chog holder · #${profile.chog.tokenId}`}</div>
-        <h2 className="display text-3xl font-extrabold text-[#24133f]">{profile.displayName}</h2>
-        <p className="mt-1 text-sm text-[#887c90]">@{profile.username}</p>
-        <p className="mt-4 text-sm leading-6 text-[#6d6178]">{profile.bio || 'Add an introduction to help other Chog holders get to know you.'}</p>
-        <div className="mt-4 grid gap-x-5 gap-y-2 text-xs text-[#796d83] sm:grid-cols-2">
-          {profile.name && <p><span className="font-bold text-[#51445f]">Name</span> · {profile.name}</p>}
-          {testMode && profile.age !== null && <p><span className="font-bold text-[#51445f]">Age</span> · {profile.age}</p>}
-          {profile.gender && <p><span className="font-bold text-[#51445f]">Gender</span> · {profile.gender}</p>}
-          {profile.location && <p><span className="font-bold text-[#51445f]">Location</span> · {profile.location}</p>}
-          {profile.timezone && <p><span className="font-bold text-[#51445f]">Timezone</span> · {profile.timezone}</p>}
+  const hasDetails = Boolean(profile.name || profile.gender || profile.location || profile.timezone);
+  const groups = [
+    { label: 'Interests', values: profile.interests, style: 'bg-[#f4e9f1] text-[#884866]' },
+    { label: 'Hobbies', values: profile.hobbies, style: 'bg-[#f7efe0] text-[#846432]' },
+    { label: 'Skills', values: profile.skills, style: 'border border-[#e7dce2] text-[#66536a]' },
+    { label: 'Languages', values: profile.languages, style: 'border border-[#e7dce2] text-[#66536a]' },
+  ].filter(group => group.values.length > 0);
+  return <>
+    <style>{`
+      .profile-preview-card{background:#fffaf8;border:1px solid rgba(116,66,89,.15);box-shadow:0 18px 45px rgba(79,43,64,.09)}
+      .profile-preview-top{background:#38253a}
+      .profile-artwork img{transition:transform .7s cubic-bezier(.2,.75,.25,1)}
+      .profile-preview-card:hover .profile-artwork img{transform:scale(1.025)}
+      .profile-preview-copy{background:linear-gradient(140deg,#fffaf8 0%,#fffdf9 100%)}
+      @media(prefers-reduced-motion:reduce){.profile-artwork img{transition:none}}
+    `}</style>
+    <section className="profile-preview-card overflow-hidden rounded-[30px]" aria-label="Public profile preview" data-testid="profile-preview">
+    <div className="profile-preview-top flex items-center justify-between gap-3 px-5 py-3.5 sm:px-7">
+      <div className="flex items-center gap-2 text-[#f8eaf0]">
+        <span className="grid h-7 w-7 place-items-center rounded-full bg-white/10"><Eye size={14}/></span>
+        <span><span className="block text-[10px] font-bold uppercase tracking-[.16em]">Public profile preview</span><span className="mt-0.5 block text-[9px] text-white/60">Updates as you edit</span></span>
+      </div>
+      <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[.12em] text-white/85">
+        {testMode ? <Activity size={12}/> : <BadgeCheck size={12}/>}
+        {testMode ? 'Test mode' : `Verified · #${profile.chog.tokenId}`}
+      </span>
+    </div>
+    <div className="grid md:grid-cols-[minmax(200px,.72fr)_1.28fr]">
+      <div className="profile-artwork relative aspect-[1.08] min-h-[250px] overflow-hidden bg-[#eadde2] md:aspect-auto md:min-h-[390px]">
+        <ChogArtwork chog={profile.chog}/>
+        <div className="absolute inset-0 bg-gradient-to-t from-[#261529]/75 via-transparent to-transparent"/>
+        <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between text-white">
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-[.2em] text-white/75">Chog Genesis</p>
+            <p className="display mt-1 text-[25px] leading-none text-white">#{profile.chog.tokenId}</p>
+          </div>
+          <span className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-white/15 backdrop-blur"><Sparkles size={17}/></span>
         </div>
-        {profile.interests.length>0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b8fa0]">Interests</p><div className="mt-2 flex flex-wrap gap-2">{profile.interests.map(value=><span key={value} className="rounded-full bg-[#f2ecff] px-3 py-1.5 text-[11px] font-semibold text-[#6246b0]">{value}</span>)}</div></div>}
-        {profile.hobbies.length>0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b8fa0]">Hobbies</p><div className="mt-2 flex flex-wrap gap-2">{profile.hobbies.map(value=><span key={value} className="rounded-full bg-[#f2ecff] px-3 py-1.5 text-[11px] font-semibold text-[#6246b0]">{value}</span>)}</div></div>}
-        {profile.skills.length>0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b8fa0]">Skills</p><div className="mt-2 flex flex-wrap gap-2">{profile.skills.map(value=><span key={value} className="rounded-full border border-[#e9e1d7] px-3 py-1 text-[11px] text-[#7c7185]">{value}</span>)}</div></div>}
-        {profile.languages.length>0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b8fa0]">Languages</p><div className="mt-2 flex flex-wrap gap-2">{profile.languages.map(value=><span key={value} className="rounded-full border border-[#e9e1d7] px-3 py-1 text-[11px] text-[#7c7185]">{value}</span>)}</div></div>}
-        <div className="mt-5"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b8fa0]">Looking for</p><div className="mt-2 flex flex-wrap gap-2">{profile.lookingFor.map(value=><span key={value} className="rounded-full bg-[#fff6e9] px-3 py-1.5 text-[11px] font-semibold text-[#9b6b3c]">{value}</span>)}</div></div>
+      </div>
+      <div className="profile-preview-copy p-5 sm:p-7 lg:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="mb-2 text-[9px] font-bold uppercase tracking-[.19em] text-[#a35b79]">A little about me</p>
+            <h2 className="display break-words text-[34px] leading-[.95] text-[#332037] sm:text-[42px]" data-testid="text-preview-display-name">{profile.displayName || 'Your name'}</h2>
+            <p className="mt-2 text-[13px] font-medium text-[#957f8d]" data-testid="text-preview-username">@{profile.username || 'your-handle'}</p>
+          </div>
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f6e9ee] text-[#a8436a]" aria-label="Chog ownership verified"><BadgeCheck size={19}/></span>
+        </div>
+        <p className="mt-5 max-w-2xl whitespace-pre-line text-[13px] leading-6 text-[#685865]" data-testid="text-preview-bio">{profile.bio || 'Your introduction will live here. Share what makes you, you.'}</p>
+        {hasDetails && <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 border-t border-[#eee5e5] pt-4 text-[11px] text-[#776878]">
+          {profile.location && <span className="inline-flex items-center gap-1.5"><MapPin size={13} className="text-[#a35b79]"/>{profile.location}</span>}
+          {profile.timezone && <span className="inline-flex items-center gap-1.5"><Globe2 size={13} className="text-[#a35b79]"/>{profile.timezone}</span>}
+          {profile.name && <span>{profile.name}</span>}
+          {profile.gender && <span>{profile.gender}</span>}
+          {testMode && profile.age !== null && <span>{profile.age}</span>}
+        </div>}
+        {groups.length > 0 && <div className="mt-5 space-y-4">
+          {groups.map(group => <div key={group.label}>
+            <p className="mb-2 text-[9px] font-bold uppercase tracking-[.16em] text-[#a28d9b]">{group.label}</p>
+            <div className="flex flex-wrap gap-1.5">{group.values.map(value=><span key={value} className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ${group.style}`}>{value}</span>)}</div>
+          </div>)}
+        </div>}
+        {profile.lookingFor.length > 0 && <div className="mt-5 border-t border-[#eee5e5] pt-4">
+          <p className="mb-2 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[.16em] text-[#a28d9b]"><Heart size={12} className="text-[#b34b70]"/>Open to</p>
+          <div className="flex flex-wrap gap-1.5">{profile.lookingFor.map(value=><span key={value} className="rounded-full bg-[#f8e9e8] px-3 py-1.5 text-[10px] font-bold text-[#984d55]">{value}</span>)}</div>
+        </div>}
       </div>
     </div>
-  </section>;
+    </section>
+  </>;
 }
 
 function testProfilePreview(
@@ -390,59 +439,155 @@ export function ProfilePage() {
     : <ConnectedProfilePage />;
 }
 
+type ConnectedProfileFormValues = {
+  username: string;
+  displayName: string;
+  name: string;
+  gender: string;
+  age: string;
+  bio: string;
+  location: string;
+  timezone: string;
+  interests: string;
+  hobbies: string;
+  skills: string;
+  languages: string;
+  lookingFor: string;
+  selectedChogTokenId: string;
+  profileVisible: boolean | null;
+};
+
+const emptyConnectedProfile: ConnectedProfileFormValues = {
+  username: '',
+  displayName: '',
+  name: '',
+  gender: '',
+  age: '',
+  bio: '',
+  location: '',
+  timezone: '',
+  interests: '',
+  hobbies: '',
+  skills: '',
+  languages: '',
+  lookingFor: '',
+  selectedChogTokenId: '',
+  profileVisible: null,
+};
+
 function ConnectedProfilePage() {
   const me = useGetMe({ query: { queryKey: getGetMeQueryKey(), refetchOnWindowFocus: true } });
   const profile = me.data?.profile;
-  const [username,setUsername] = useState('');
-  const [displayName,setDisplayName] = useState('');
-  const [name,setName] = useState('');
-  const [gender,setGender] = useState('');
-  const [age,setAge] = useState('');
-  const [bio,setBio] = useState('');
-  const [location,setLocation] = useState('');
-  const [timezone,setTimezone] = useState('');
-  const [interests,setInterests] = useState('');
-  const [hobbies,setHobbies] = useState('');
-  const [skills,setSkills] = useState('');
-  const [languages,setLanguages] = useState('');
-  const [lookingFor,setLookingFor] = useState('');
-  const [selectedChogTokenId,setSelectedChogTokenId] = useState('');
+  const form = useForm<ConnectedProfileFormValues>({ defaultValues: emptyConnectedProfile });
+  const { reset, setValue, watch, getValues } = form;
+  const {
+    username,
+    displayName,
+    name,
+    gender,
+    age,
+    bio,
+    location,
+    timezone,
+    interests,
+    hobbies,
+    skills,
+    languages,
+    lookingFor,
+    selectedChogTokenId,
+    profileVisible,
+  } = watch();
   const [notice,setNotice] = useState('');
-  const [profileVisible,setProfileVisible] = useState<boolean | null>(null);
-  const [initialized,setInitialized] = useState(false);
+  const [initializedWalletAddress,setInitializedWalletAddress] = useState('');
+  const [usernameError,setUsernameError] = useState('');
   useEffect(()=>{
-    if(!me.data || initialized) return;
+    if(!me.data || initializedWalletAddress.toLowerCase()===me.data.walletAddress.toLowerCase()) return;
     if(profile) {
-      setUsername(profile.username); setDisplayName(profile.displayName); setName(profile.name||''); setGender(profile.gender||''); setAge(profile.age ? String(profile.age) : ''); setBio(profile.bio||'');
-      setLocation(profile.location||''); setTimezone(profile.timezone||''); setInterests(joinTags(profile.interests));
-      setHobbies(joinTags(profile.hobbies)); setSkills(joinTags(profile.skills));
-      setLanguages(joinTags(profile.languages)); setLookingFor(joinTags(profile.lookingFor));
-      setSelectedChogTokenId(me.data.selectedChogTokenId || profile.chog.tokenId);
-      setProfileVisible(me.data.profileVisible ?? true);
+      reset({
+        username: profile.username,
+        displayName: profile.displayName,
+        name: profile.name || '',
+        gender: profile.gender || '',
+        age: profile.age === null ? '' : String(profile.age),
+        bio: profile.bio || '',
+        location: profile.location || '',
+        timezone: profile.timezone || '',
+        interests: joinTags(profile.interests),
+        hobbies: joinTags(profile.hobbies),
+        skills: joinTags(profile.skills),
+        languages: joinTags(profile.languages),
+        lookingFor: joinTags(profile.lookingFor),
+        selectedChogTokenId: me.data.selectedChogTokenId || profile.chog.tokenId,
+        profileVisible: me.data.profileVisible ?? true,
+      });
     } else {
       const requestedTokenId = new URLSearchParams(window.location.search).get('chog');
       const requestedChog = me.data.chogs.find(chog=>chog.verified && chog.tokenId===requestedTokenId);
-      setSelectedChogTokenId(requestedChog?.tokenId || '');
-      setProfileVisible(true);
+      reset({
+        ...emptyConnectedProfile,
+        selectedChogTokenId: requestedChog?.tokenId || '',
+        profileVisible: true,
+      });
     }
-    setInitialized(true);
-  },[profile,me.data,initialized]);
+    setUsernameError('');
+    setNotice('');
+    setInitializedWalletAddress(me.data.walletAddress);
+  },[profile,me.data,initializedWalletAddress,reset]);
   const update = useUpdateMeProfile();
   const selectActiveChog = useSelectActiveChog();
   const qc = useQueryClient();
   async function save(event: FormEvent) {
     event.preventDefault(); setNotice('');
-    if (!lookingFor.trim()) { setNotice('Add at least one connection type to continue.'); return; }
+    const values = getValues();
+    const cleanUsername = values.username.trim();
+    if (!/^[a-zA-Z0-9_]{2,24}$/.test(cleanUsername)) {
+      setUsernameError('Use 2–24 letters, numbers, or underscores.');
+      setNotice('Check the highlighted username before saving.');
+      return;
+    }
+    setUsernameError('');
+    if (!values.displayName.trim()) { setNotice('Add a display name to continue.'); return; }
+    if (!values.lookingFor.trim()) { setNotice('Add at least one connection type to continue.'); return; }
     const tokenIdForSave = profile
       ? me.data?.selectedChogTokenId || profile.chog.tokenId
-      : selectedChogTokenId;
+      : values.selectedChogTokenId;
     if (!tokenIdForSave) { setNotice('Choose a verified Chog to show on your profile.'); return; }
-    const isDating = tags(lookingFor).some(value=>/date|romantic/i.test(value));
-    const numericAge = age.trim() ? Number(age) : null;
+    const isDating = tags(values.lookingFor).some(value=>/date|romantic/i.test(value));
+    const numericAge = values.age.trim() ? Number(values.age) : null;
     if (isDating && numericAge !== null && (!Number.isInteger(numericAge) || numericAge < 18 || numericAge > 120)) { setNotice('Dating profiles must use an age between 18 and 120.'); return; }
-    const data: ProfileInput = { username:username.trim(),displayName:displayName.trim(),name:name.trim()||null,gender:gender.trim()||null,age:isDating?numericAge:null,bio:bio||undefined,location:location||undefined,timezone:timezone||undefined,interests:tags(interests),hobbies:tags(hobbies),skills:tags(skills),languages:tags(languages),lookingFor:tags(lookingFor),selectedChogTokenId:tokenIdForSave,...(profileVisible===null?{}:{profileVisible}) };
-    try { await update.mutateAsync({data}); await qc.invalidateQueries({queryKey:getGetMeQueryKey()}); setNotice('Profile saved. Your story, your way.'); }
-    catch { setNotice('Your profile couldn’t be saved. Check the fields and try again.'); }
+    const data: ProfileInput = { username:cleanUsername,displayName:values.displayName.trim(),name:values.name.trim()||null,gender:values.gender.trim()||null,age:isDating?numericAge:null,bio:values.bio||undefined,location:values.location||undefined,timezone:values.timezone||undefined,interests:tags(values.interests),hobbies:tags(values.hobbies),skills:tags(values.skills),languages:tags(values.languages),lookingFor:tags(values.lookingFor),selectedChogTokenId:tokenIdForSave,...(values.profileVisible===null?{}:{profileVisible:values.profileVisible}) };
+    try {
+      const saved = await update.mutateAsync({data});
+      reset({
+        username: saved.username,
+        displayName: saved.displayName,
+        name: saved.name || '',
+        gender: saved.gender || '',
+        age: saved.age === null ? '' : String(saved.age),
+        bio: saved.bio || '',
+        location: saved.location || '',
+        timezone: saved.timezone || '',
+        interests: joinTags(saved.interests),
+        hobbies: joinTags(saved.hobbies),
+        skills: joinTags(saved.skills),
+        languages: joinTags(saved.languages),
+        lookingFor: joinTags(saved.lookingFor),
+        selectedChogTokenId: saved.chog.tokenId,
+        profileVisible: values.profileVisible ?? true,
+      });
+      await qc.invalidateQueries({queryKey:getGetMeQueryKey()});
+      setNotice('Your profile is saved. This is how other Chog holders will meet you.');
+    }
+    catch (error) {
+      const apiMessage = error && typeof error === 'object' && 'data' in error
+        ? (error as { data?: unknown }).data
+        : null;
+      const message = apiMessage && typeof apiMessage === 'object' && 'error' in apiMessage
+        && typeof (apiMessage as { error?: unknown }).error === 'string'
+        ? (apiMessage as { error: string }).error
+        : 'Your profile couldn’t be saved. Check your connection and try again.';
+      setNotice(message);
+    }
   }
   async function switchActiveChog() {
     setNotice('');
@@ -460,42 +605,119 @@ function ConnectedProfilePage() {
       setNotice('Couldn’t switch your active Chog. Ownership may have changed; refresh and try again.');
     }
   }
+  const selectedChog = me.data?.chogs.find(chog=>chog.verified && chog.tokenId===selectedChogTokenId) || profile?.chog;
+  const draftPreview: ProfilePreviewData | null = selectedChog ? {
+    username, displayName, name:name||null, gender:gender||null, age:age.trim()?Number(age):null,
+    bio:bio||null, location:location||null, timezone:timezone||null,
+    interests:tags(interests), hobbies:tags(hobbies), skills:tags(skills), languages:tags(languages),
+    lookingFor:tags(lookingFor), chog:selectedChog,
+  } : null;
   return <AppShell displayName={profile?.displayName}><div className="page-enter">
-    <PageTitle eyebrow="Tell them a little more" title="Your profile." description="Your Chog proves you’re part of the community. The rest is yours to shape." action={<div className="flex flex-wrap gap-2"><a href="#edit-profile" className="button-primary inline-flex items-center rounded-full px-4 py-2.5 text-xs font-bold" data-testid="link-edit-profile">Edit profile</a><Link href="/my-chog" className="button-soft inline-flex items-center rounded-full px-4 py-2.5 text-xs font-bold" data-testid="link-profile-my-chog">My Chogs</Link><Link href="/settings" className="button-soft inline-flex items-center rounded-full px-4 py-2.5 text-xs font-bold" data-testid="link-profile-settings">Settings</Link></div>} />
+    <style>{`
+      .profile-page-heading{position:relative;border:1px solid rgba(168,83,112,.18);background:linear-gradient(115deg,rgba(255,246,244,.98),rgba(255,249,241,.98) 62%,rgba(248,234,238,.98));box-shadow:0 15px 36px rgba(92,49,67,.07)}
+      .profile-page-heading:after{content:"";position:absolute;z-index:0;right:-58px;top:-120px;width:320px;height:320px;border:1px solid rgba(178,91,124,.16);border-radius:50%;pointer-events:none;box-shadow:0 0 0 28px rgba(178,91,124,.035),0 0 0 58px rgba(178,91,124,.025)}
+      .profile-page-heading>*{position:relative;z-index:1}
+      .profile-form-panel,.profile-side-panel{position:relative;border:1px solid rgba(133,82,104,.16);background:rgba(255,251,248,.96);box-shadow:0 13px 35px rgba(79,43,64,.065)}
+      .profile-section-index{display:grid;width:29px;height:29px;flex:none;place-items:center;border:1px solid #ead4dc;border-radius:50%;background:#fbf1f2;color:#a34d70;font:700 9px var(--app-font-mono)}
+      .profile-field-label{display:block;margin-bottom:8px;color:#594a58;font-size:11px;font-weight:700}
+      .profile-field-prefix{position:absolute;left:13px;top:12px;color:#a38d99}
+      .profile-chog-choice{border:1px solid #eadddf;background:#fffaf8;transition:transform .2s,border-color .2s,box-shadow .2s}
+      .profile-chog-choice:hover{transform:translateY(-2px);border-color:#c78da0}
+      .profile-chog-choice.is-selected{border-color:#ad5275;box-shadow:0 0 0 3px rgba(173,82,117,.12)}
+      .profile-visibility-choice{display:flex;min-height:44px;align-items:center;justify-content:center;gap:6px;border:1px solid #e7dadd;border-radius:12px;background:#fffaf8;padding:8px;color:#766776;font-size:10px;font-weight:700;transition:background .2s,border-color .2s,color .2s}
+      .profile-visibility-choice:hover{border-color:#c78da0}
+      .profile-visibility-choice.is-selected{border-color:#ad5275;background:#f8e9ee;color:#984567}
+      .profile-chog-choice:focus-visible,.profile-visibility-choice:focus-visible,.profile-form-panel button:focus-visible{outline:2px solid #a8436a;outline-offset:3px}
+      @media(max-width:639px){.profile-page-heading:after{right:-180px;opacity:.55}}
+    `}</style>
+    <div className="profile-page-heading mb-7 overflow-hidden rounded-[30px] px-5 py-6 sm:px-8 sm:py-8">
+      <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+        <div className="max-w-2xl">
+          <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em] text-[#9d4b6b]"><span className="h-1.5 w-1.5 rounded-full bg-[#bf5678]"/>Your introduction to the community</div>
+          <h1 className="display text-[42px] leading-[.92] text-[#38253a] sm:text-[58px]" data-testid="heading-page">{profile ? 'Make it yours.' : 'Let’s meet.'}</h1>
+          <p className="mt-4 max-w-xl text-sm leading-6 text-[#756575]">Your verified Chog gets you in the room. Add the details that help the right people find their way to you.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <a href="#edit-profile" className="button-primary inline-flex items-center rounded-full px-4 py-2.5 text-xs font-bold" data-testid="link-edit-profile">{profile ? 'Edit details' : 'Start your profile'}</a>
+          <Link href="/my-chog" className="button-soft inline-flex items-center rounded-full px-4 py-2.5 text-xs font-bold" data-testid="link-profile-my-chog">My Chogs</Link>
+          <Link href="/settings" className="button-soft inline-flex items-center rounded-full px-4 py-2.5 text-xs font-bold" data-testid="link-profile-settings">Settings</Link>
+        </div>
+      </div>
+      <div className="mt-7 grid max-w-2xl grid-cols-3 gap-2 sm:gap-3" aria-label="Profile setup steps">
+        {[['01','Your story'],['02','Your people'],['03','Your visibility']].map(([step,label],index)=><div key={step} className="flex items-center gap-2.5 border-t border-[#cf9bad]/40 pt-3">
+          <span className={`font-mono text-[9px] font-bold ${index===0?'text-[#b04770]':'text-[#ad9ba5]'}`}>{step}</span><span className="text-[10px] font-semibold text-[#776575] sm:text-[11px]">{label}</span>
+        </div>)}
+      </div>
+    </div>
     <QueryState loading={me.isLoading} error={me.isError} retry={()=>void me.refetch()}>
       {!me.data ? <EmptyState title="Connect to create your profile." detail="Sign in with the wallet holding your Chog Genesis NFT to get started."/> :
        (!me.data.hasChog || !me.data.chogs.some(chog=>chog.verified)) ? <EmptyState title="No Chog Found" detail="A Chog NFT is required to create a CHOG MATE profile. Connect the wallet that owns a Chog NFT to continue."/> :
        (me.data.hasProfile && !profile) ? <EmptyState title="Choose an active Chog." detail="Your previous active Chog is no longer in this wallet. Choose another verified Chog to restore your profile; your saved details will stay unchanged." action={<Link href="/my-chog" className="button-primary inline-flex rounded-full px-5 py-3 text-xs font-bold" data-testid="link-restore-active-chog">Choose a Chog</Link>}/> :
-       <div className="space-y-5">
-       {profile && <ProfilePreview profile={profile}/>}
-       <form id="edit-profile" onSubmit={save} className="grid scroll-mt-24 gap-6 lg:grid-cols-[1fr_330px]">
-        <section className="surface rounded-[28px] p-5 sm:p-8">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Display name" value={displayName} onChange={setDisplayName} placeholder="How people will meet you" maxLength={48} testId="input-display-name"/>
-            <Field label="Username" value={username} onChange={v=>setUsername(v.replace(/[^a-zA-Z0-9_]/g,''))} placeholder="Your public handle" maxLength={24} prefix="@" testId="input-username"/>
-             <Field label="Name" value={name} onChange={setName} placeholder="Name shown on your profile" maxLength={80} testId="input-profile-name"/>
-             <Field label="Gender" value={gender} onChange={setGender} placeholder="Optional" maxLength={50} testId="input-profile-gender"/>
-             {tags(lookingFor).some(value=>/date|romantic/i.test(value)) && <label><span className="mb-2 block text-xs font-bold text-[#5c5067]">Age <span className="font-normal text-[#958a9b]">(dating only)</span></span><input className="field" type="number" min="18" max="120" step="1" inputMode="numeric" value={age} onChange={event=>setAge(event.target.value)} placeholder="18+" data-testid="input-profile-age"/><span className="mt-1 block text-[10px] text-[#9b8fa0]">Shown to other holders only in Dating mode. You must be 18 or older.</span></label>}
-            <label className="sm:col-span-2"><span className="mb-2 block text-xs font-bold text-[#5c5067]">Your introduction</span><textarea value={bio} onChange={e=>setBio(e.target.value)} maxLength={500} rows={4} className="field resize-y" placeholder="A little about what lights you up…" data-testid="input-bio"/><span className="mt-1 block text-right text-[10px] text-[#9c91a1]">{bio.length}/500</span></label>
-            <Field label="Location" value={location} onChange={setLocation} placeholder="City, region" testId="input-location"/>
-            <Field label="Timezone" value={timezone} onChange={setTimezone} placeholder="e.g. UTC−5" testId="input-timezone"/>
-            <TagField label="Interests" value={interests} onChange={setInterests} placeholder="Art, climbing, long reads" testId="input-interests"/>
-             <TagField label="Hobbies" value={hobbies} onChange={setHobbies} placeholder="Hiking, cooking, photography" testId="input-hobbies"/>
-            <TagField label="Skills" value={skills} onChange={setSkills} placeholder="Design, writing, Solidity" testId="input-skills"/>
-             <TagField label="Languages" value={languages} onChange={setLanguages} placeholder="English, Hindi, Spanish" testId="input-languages"/>
-            <TagField label="What are you looking for?" value={lookingFor} onChange={setLookingFor} placeholder="Dates, friends, collaborators" testId="input-looking-for"/>
-          </div>
-          {notice && <p className={`mt-5 rounded-2xl px-4 py-3 text-sm ${notice.startsWith('Profile saved')?'bg-[#eef8ea] text-[#447a43]':'bg-[#fff2ec] text-[#914c3c]'}`} role="status" data-testid="status-profile-save">{notice}</p>}
-          <div className="mt-6 flex flex-col-reverse justify-between gap-4 border-t border-[#24133f10] pt-5 sm:flex-row sm:items-center"><p className="text-xs text-[#908498]">Your wallet, verified ownership, and token ID can’t be edited.</p><button type="submit" disabled={update.isPending} className="button-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-bold disabled:opacity-50" data-testid="button-save-profile"><Save size={16}/>{update.isPending?'Saving…':'Save profile'}</button></div>
-        </section>
-        <aside className="surface h-fit rounded-[28px] p-6">
-           <Eyebrow>Verified Chogs</Eyebrow><h2 className="display text-2xl font-extrabold text-[#24133f]">{profile?'Choose your active Chog.':'Choose your Chog.'}</h2>
-           <div className="mt-5 grid grid-cols-2 gap-3">{me.data.chogs.filter(chog=>chog.verified).map(chog=><button type="button" onClick={()=>setSelectedChogTokenId(chog.tokenId)} key={chog.tokenId} className={`overflow-hidden rounded-2xl border-2 text-left transition ${selectedChogTokenId===chog.tokenId?'border-[#8a63ff] shadow-[0_0_0_3px_#8a63ff1c]':'border-transparent'}`} data-testid={`button-select-chog-${chog.tokenId}`}><div className="relative aspect-square"><ChogArtwork chog={chog}/>{me.data.selectedChogTokenId===chog.tokenId && <span className="absolute right-2 top-2 rounded-full bg-[#7047ff] px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white">Active</span>}</div><div className="bg-white px-3 py-2 text-xs font-bold text-[#51445f]">#{chog.tokenId}{chog.tier && <span className="mt-1 block text-[10px] font-medium text-[#715795]">Tier: {chog.tier}</span>}{selectedChogTokenId===chog.tokenId && <Check className="float-right text-[#7047ff]" size={14}/>}</div></button>)}</div>
-           {profile ? <div className="mt-5 border-t border-[#24133f10] pt-5"><p className="text-xs leading-5 text-[#82778c]">Switching changes only your active Chog identity. Your name, username, bio, preferences, and other profile details stay the same.</p><button type="button" onClick={()=>void switchActiveChog()} disabled={selectActiveChog.isPending || !selectedChogTokenId || selectedChogTokenId===me.data.selectedChogTokenId} className="button-primary mt-4 w-full rounded-full px-5 py-3 text-xs font-bold disabled:opacity-50" data-testid="button-set-active-chog">{selectActiveChog.isPending?'Revalidating ownership…':selectedChogTokenId===me.data.selectedChogTokenId?'Active Chog':'Make active Chog'}</button></div> : <p className="mt-4 text-[11px] leading-5 text-[#998ea0]">Your selected Chog will become your active identity when you save your profile.</p>}
-          <div className="mt-6 border-t border-[#24133f10] pt-5"><p className="mb-3 flex items-center gap-2 text-sm font-bold text-[#51445f]"><Eye size={15}/> Profile discoverability</p><div className="grid grid-cols-2 gap-2"><button type="button" onClick={()=>setProfileVisible(true)} aria-pressed={profileVisible===true} className={`rounded-xl border px-3 py-2.5 text-xs font-bold ${profileVisible===true?'border-[#8a63ff] bg-[#f2ecff] text-[#6246b0]':'border-[#e9e0d3] bg-white text-[#7c7185]'}`} data-testid="button-profile-show">Show profile</button><button type="button" onClick={()=>setProfileVisible(false)} aria-pressed={profileVisible===false} className={`rounded-xl border px-3 py-2.5 text-xs font-bold ${profileVisible===false?'border-[#8a63ff] bg-[#f2ecff] text-[#6246b0]':'border-[#e9e0d3] bg-white text-[#7c7185]'}`} data-testid="button-profile-hide">Hide from discovery</button></div><p className="mt-3 text-[11px] leading-5 text-[#998ea0]">{profileVisible===null?'Current visibility is not returned by the profile service. Choose an option to update it.':'Visibility is saved with your profile when you choose Save profile.'}</p></div>
-        </aside>
-       </form>
-       </div>}
+        <div className="space-y-6">
+          {draftPreview && <ProfilePreview profile={draftPreview}/>}
+          {!draftPreview && <div className="surface flex items-center gap-3 rounded-2xl px-4 py-3 text-xs text-[#776575]" role="status"><ShieldCheck size={17} className="shrink-0 text-[#9d4b6b]"/>Choose one of your verified Chogs to see your profile preview.</div>}
+          <Form {...form}>
+          <form id="edit-profile" onSubmit={save} className="grid scroll-mt-24 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
+           <section className="profile-form-panel rounded-[28px] p-5 sm:p-8">
+             <div className="mb-7 flex items-start justify-between gap-4 border-b border-[#eadde2] pb-5">
+               <div><p className="text-[9px] font-bold uppercase tracking-[.18em] text-[#a35b79]">{profile?'Profile details':'First, the basics'}</p><h2 className="display mt-1 text-[28px] text-[#38253a]">{profile?'Refine your introduction.':'Start with what feels like you.'}</h2></div>
+               <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f7e9ed] text-[#ac4c70] sm:grid"><Sparkles size={18}/></span>
+             </div>
+             <div className="space-y-7">
+               <div>
+                 <div className="mb-4 flex items-center gap-3"><span className="profile-section-index">01</span><div><h3 className="text-sm font-bold text-[#493b4d]">The name they’ll remember</h3><p className="mt-0.5 text-[11px] text-[#92818f]">A name and handle for your community profile.</p></div></div>
+                 <div className="grid gap-4 sm:grid-cols-2">
+                    <label><span className="profile-field-label">Display name <span className="text-[#b45a78]">*</span></span><input className="field" value={displayName} onChange={e=>setValue('displayName',e.target.value,{shouldDirty:true})} placeholder="How people will meet you" maxLength={48} required aria-label="Display name" data-testid="input-display-name"/></label>
+                    <label><span className="profile-field-label">Username <span className="text-[#b45a78]">*</span></span><span className="relative block"><span className="profile-field-prefix">@</span><input className={`field pl-8 ${usernameError?'!border-[#c65861]':''}`} value={username} onChange={e=>{setValue('username',e.target.value.replace(/[^a-zA-Z0-9_]/g,''),{shouldDirty:true});setUsernameError('');}} placeholder="Your public handle" maxLength={24} minLength={2} required aria-invalid={Boolean(usernameError)} aria-describedby={usernameError?'username-help':'username-format'} data-testid="input-username"/></span><span id={usernameError?'username-help':'username-format'} className={`mt-1.5 block text-[10px] ${usernameError?'text-[#aa4848]':'text-[#978692]'}`}>{usernameError || '2–24 letters, numbers, or underscores.'}</span></label>
+                    <Field label="Name" value={name} onChange={value=>setValue('name',value,{shouldDirty:true})} placeholder="Name shown on your profile" maxLength={80} testId="input-profile-name"/>
+                    <Field label="Gender" value={gender} onChange={value=>setValue('gender',value,{shouldDirty:true})} placeholder="Optional" maxLength={50} testId="input-profile-gender"/>
+                 </div>
+               </div>
+               <div>
+                 <div className="mb-4 flex items-center gap-3"><span className="profile-section-index">02</span><div><h3 className="text-sm font-bold text-[#493b4d]">A little of your story</h3><p className="mt-0.5 text-[11px] text-[#92818f]">Give someone a good reason to say hello.</p></div></div>
+                 <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="sm:col-span-2"><span className="profile-field-label">Your introduction</span><textarea value={bio} onChange={e=>setValue('bio',e.target.value,{shouldDirty:true})} maxLength={500} rows={4} className="field resize-y" placeholder="What are you curious about lately? What do you love talking about?" data-testid="input-bio"/><span className="mt-1.5 block text-right text-[10px] text-[#978692]">{bio.length}/500</span></label>
+                    <Field label="Location" value={location} onChange={value=>setValue('location',value,{shouldDirty:true})} placeholder="City, region" maxLength={100} testId="input-location"/>
+                    <Field label="Timezone" value={timezone} onChange={value=>setValue('timezone',value,{shouldDirty:true})} placeholder="e.g. UTC−5" maxLength={100} testId="input-timezone"/>
+                    <TagField label="Interests" value={interests} onChange={value=>setValue('interests',value,{shouldDirty:true})} placeholder="Art, climbing, long reads" testId="input-interests"/>
+                    <TagField label="Hobbies" value={hobbies} onChange={value=>setValue('hobbies',value,{shouldDirty:true})} placeholder="Hiking, cooking, photography" testId="input-hobbies"/>
+                    <TagField label="Skills" value={skills} onChange={value=>setValue('skills',value,{shouldDirty:true})} placeholder="Design, writing, Solidity" testId="input-skills"/>
+                    <TagField label="Languages" value={languages} onChange={value=>setValue('languages',value,{shouldDirty:true})} placeholder="English, Hindi, Spanish" testId="input-languages"/>
+                 </div>
+               </div>
+               <div>
+                 <div className="mb-4 flex items-center gap-3"><span className="profile-section-index">03</span><div><h3 className="text-sm font-bold text-[#493b4d]">Who would you like to meet?</h3><p className="mt-0.5 text-[11px] text-[#92818f]">Pick the kinds of connections you’re open to.</p></div></div>
+                  <TagField label="What are you looking for?" value={lookingFor} onChange={value=>setValue('lookingFor',value,{shouldDirty:true})} placeholder="Dates, friends, collaborators" testId="input-looking-for"/>
+                  {tags(lookingFor).some(value=>/date|romantic/i.test(value)) && <label className="mt-4 block max-w-sm"><span className="profile-field-label">Age <span className="font-normal text-[#958a9b]">(dating only)</span></span><input className="field" type="number" min="18" max="120" step="1" inputMode="numeric" value={age} onChange={event=>setValue('age',event.target.value,{shouldDirty:true})} placeholder="18+" data-testid="input-profile-age"/><span className="mt-1.5 block text-[10px] leading-4 text-[#978692]">Only shown to holders in Dating mode. You must be 18 or older.</span></label>}
+               </div>
+             </div>
+             {notice && <p className={`mt-6 flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm leading-5 ${notice.startsWith('Your profile is saved')?'border border-[#bed8c0] bg-[#edf6ec] text-[#3d7048]':'border border-[#ebc9c5] bg-[#fff1ed] text-[#914c3c]'}`} role="status" data-testid="status-profile-save"><span className="mt-0.5"><Check size={15}/></span>{notice}</p>}
+             <div className="mt-7 flex flex-col-reverse justify-between gap-4 border-t border-[#eadde2] pt-5 sm:flex-row sm:items-center">
+               <p className="max-w-xs text-[10px] leading-5 text-[#958692]">Your wallet, verified ownership, and token ID are protected and can’t be edited here.</p>
+               <button type="submit" disabled={update.isPending} className="button-primary inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-bold disabled:opacity-50" data-testid="button-save-profile"><Save size={16}/>{update.isPending?'Saving your profile…':'Save profile'}</button>
+             </div>
+           </section>
+           <aside className="profile-side-panel h-fit rounded-[28px] p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div><p className="text-[9px] font-bold uppercase tracking-[.17em] text-[#a35b79]">Your verified collection</p><h2 className="display mt-1 text-[25px] text-[#38253a]">{profile?'Active Chog':'Choose your Chog'}</h2></div>
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f6e9ee] text-[#a64b70]"><BadgeCheck size={17}/></span>
+              </div>
+              <p className="mt-2 text-[11px] leading-5 text-[#897985]">{profile?'Choose which verified Chog represents you.':'Select the verified NFT you want on your profile.'}</p>
+              <div className="mt-4 grid grid-cols-2 gap-2.5">{me.data.chogs.filter(chog=>chog.verified).map(chog=><button type="button" onClick={()=>setValue('selectedChogTokenId',chog.tokenId,{shouldDirty:true})} key={chog.tokenId} aria-pressed={selectedChogTokenId===chog.tokenId} className={`profile-chog-choice overflow-hidden rounded-[17px] text-left ${selectedChogTokenId===chog.tokenId?'is-selected':''}`} data-testid={`button-select-chog-${chog.tokenId}`}><div className="relative aspect-square"><ChogArtwork chog={chog}/>{me.data.selectedChogTokenId===chog.tokenId && <span className="absolute right-1.5 top-1.5 rounded-full bg-[#35243a]/90 px-2 py-1 text-[8px] font-bold uppercase tracking-wide text-white">Active</span>}{selectedChogTokenId===chog.tokenId && <span className="absolute bottom-1.5 left-1.5 grid h-5 w-5 place-items-center rounded-full bg-[#fffaf7] text-[#a64b70]"><Check size={12}/></span>}</div><div className="bg-[#fffaf8] px-2.5 py-2"><span className="block text-[11px] font-bold text-[#4b3c4c]">Chog #{chog.tokenId}</span>{chog.tier && <span className="mt-0.5 block text-[9px] text-[#9b8797]">{chog.tier}</span>}</div></button>)}</div>
+              {profile ? <div className="mt-4 border-t border-[#eadde2] pt-4"><p className="text-[10px] leading-5 text-[#897985]">Switching changes only your active Chog identity. Your profile details stay exactly as they are.</p><button type="button" onClick={()=>void switchActiveChog()} disabled={selectActiveChog.isPending || !selectedChogTokenId || selectedChogTokenId===me.data.selectedChogTokenId} className="button-primary mt-3 w-full rounded-full px-4 py-3 text-xs font-bold disabled:opacity-50" data-testid="button-set-active-chog">{selectActiveChog.isPending?'Revalidating ownership…':selectedChogTokenId===me.data.selectedChogTokenId?'Active Chog':'Make active Chog'}</button></div> : <p className="mt-3 text-[10px] leading-5 text-[#897985]">Your selected Chog becomes your active profile identity when you save.</p>}
+              <div className="mt-5 border-t border-[#eadde2] pt-4">
+                <p className="mb-3 flex items-center gap-2 text-xs font-bold text-[#493b4d]"><Eye size={15} className="text-[#a34d70]"/>Discovery visibility</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={()=>setValue('profileVisible',true,{shouldDirty:true})} aria-pressed={profileVisible===true} className={`profile-visibility-choice ${profileVisible===true?'is-selected':''}`} data-testid="button-profile-show"><Eye size={14}/>Show profile</button>
+                  <button type="button" onClick={()=>setValue('profileVisible',false,{shouldDirty:true})} aria-pressed={profileVisible===false} className={`profile-visibility-choice ${profileVisible===false?'is-selected':''}`} data-testid="button-profile-hide"><EyeOff size={14}/>Hide from discovery</button>
+                </div>
+                <p className="mt-2.5 text-[10px] leading-5 text-[#978692]">{profileVisible===null?'Choose how you want to appear; current visibility is not returned by the profile service.':'Saved together with your profile when you choose Save profile.'} <Link href="/settings" className="font-bold text-[#a34d70]" data-testid="link-profile-visibility-settings">Manage in Settings</Link></p>
+              </div>
+              <div className="mt-4 flex items-start gap-2 rounded-xl bg-[#f8f0ee] px-3 py-2.5 text-[9px] leading-4 text-[#806f7c]"><LockKeyhole size={13} className="mt-0.5 shrink-0 text-[#9b5670]"/>Only your profile details are shared. Wallet credentials are never displayed.</div>
+           </aside>
+          </form>
+          </Form>
+        </div>}
     </QueryState>
   </div></AppShell>;
 }
