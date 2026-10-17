@@ -5,11 +5,13 @@
  * CHOG MATE wallet, NFT, profile, discovery, and social API
  * OpenAPI spec version: 0.1.0
  */
+import type { SessionUserIdentityMode } from './sessionUserIdentityMode';
 
 export interface SessionUser {
   userId: string;
   walletAddress: string;
   hasChog: boolean;
+  identityMode: SessionUserIdentityMode;
   accessToken: string;
   refreshToken: string;
   /** @minimum 1 */

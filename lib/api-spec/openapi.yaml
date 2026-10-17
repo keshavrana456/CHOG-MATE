@@ -72,6 +72,31 @@ paths:
                 $ref: "#/components/schemas/SessionUser"
         "401":
           description: Signature is invalid or expired
+  /auth/address:
+    post:
+      operationId: createAddressSession
+      tags: [auth]
+      summary: Start an address-only social account after verifying Chog ownership
+      description: Does not prove wallet control and must never authorize blockchain transactions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletInput"
+      responses:
+        "200":
+          description: Address-only social session created or resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionUser"
+        "400":
+          description: Wallet address is invalid
+        "403":
+          description: Address does not currently own a Chog Genesis NFT
+        "503":
+          description: Ownership or account service is unavailable
   /auth/logout:
     post:
       operationId: logoutWallet
@@ -220,7 +245,8 @@ paths:
     get:
       operationId: discoverProfiles
       tags: [profiles]
-      summary: Return a page of eligible real Chog holders
+      summary: Publicly browse a page of eligible real Chog holders
+      description: Authentication is optional; only signed-in complete profiles receive compatibility ranking.
       parameters:
         - name: mode
           in: query
@@ -245,10 +271,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DiscoveryPage"
-        "401":
-          description: Wallet session required
-        "409":
-          description: The signed-in profile is incomplete or its Chog is no longer valid
         "503":
           description: Profile data or ownership checks are temporarily unavailable
   /swipes:
@@ -443,11 +465,12 @@ components:
         signature: { type: string, pattern: "^0x[a-fA-F0-9]{130}$" }
     SessionUser:
       type: object
-      required: [userId, walletAddress, hasChog, accessToken, refreshToken, expiresIn]
+      required: [userId, walletAddress, hasChog, identityMode, accessToken, refreshToken, expiresIn]
       properties:
         userId: { type: string, format: uuid }
         walletAddress: { type: string }
         hasChog: { type: boolean }
+        identityMode: { type: string, enum: [wallet_connected, address_only] }
         accessToken: { type: string }
         refreshToken: { type: string }
         expiresIn: { type: integer, minimum: 1 }
@@ -555,11 +578,12 @@ components:
           items: { type: string }
     CurrentProfile:
       type: object
-      required: [walletAddress, hasChog, hasProfile, chogs, profileVisible]
+      required: [walletAddress, hasChog, hasProfile, chogs, profileVisible, identityMode]
       properties:
         walletAddress: { type: string }
         hasChog: { type: boolean }
         hasProfile: { type: boolean }
+        identityMode: { type: string, enum: [wallet_connected, address_only] }
         chogs:
           type: array
           items: { $ref: "#/components/schemas/Chog" }

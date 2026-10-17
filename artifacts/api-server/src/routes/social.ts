@@ -87,6 +87,16 @@ router.post("/swipes", async (req, res): Promise<void> => {
     return;
   }
 
+  if (
+    parsed.data.action === "super_like" &&
+    session.identityMode !== "wallet_connected"
+  ) {
+    res.status(403).json({
+      error: "Address-only accounts cannot send token transactions. Connect and verify the wallet first.",
+    });
+    return;
+  }
+
   try {
     const current = await requireEligibleProfile(session);
     const targetId = parsed.data.targetUserId;

@@ -434,9 +434,7 @@ function ManualTestProfilePage() {
 }
 
 export function ProfilePage() {
-  return new URLSearchParams(window.location.search).get('mode') === 'test'
-    ? <ManualTestProfilePage />
-    : <ConnectedProfilePage />;
+  return <ConnectedProfilePage />;
 }
 
 type ConnectedProfileFormValues = {
@@ -668,6 +666,22 @@ function ConnectedProfilePage() {
        (!me.data.hasChog || !me.data.chogs.some(chog=>chog.verified)) ? <EmptyState title="No Chog Found" detail="A Chog NFT is required to create a CHOG MATE profile. Connect the wallet that owns a Chog NFT to continue."/> :
        (me.data.hasProfile && !profile) ? <EmptyState title="Choose an active Chog." detail="Your previous active Chog is no longer in this wallet. Choose another verified Chog to restore your profile; your saved details will stay unchanged." action={<Link href="/my-chog" className="button-primary inline-flex rounded-full px-5 py-3 text-xs font-bold" data-testid="link-restore-active-chog">Choose a Chog</Link>}/> :
         <div className="space-y-6">
+           <div
+             className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-xs leading-5 ${
+               me.data.identityMode === 'address_only'
+                 ? 'border-[#ead8ce] bg-[#fff8f1] text-[#755247]'
+                 : 'border-[#cfe2cb] bg-[#eef8ea] text-[#447a43]'
+             }`}
+             role="status"
+             data-testid="status-profile-identity"
+           >
+             <BadgeCheck size={16} className="mt-0.5 shrink-0" />
+             <span>
+               {me.data.identityMode === 'address_only'
+                 ? 'NFT ownership is verified, but this wallet is not connected. Address-only accounts can use social features but cannot send blockchain transactions. This does not prove control of the address.'
+                 : 'Wallet connected and signature verified. Blockchain transactions still require your wallet to approve each transaction.'}
+             </span>
+           </div>
           {draftPreview && <ProfilePreview profile={draftPreview}/>}
           {!draftPreview && <div className="surface flex items-center gap-3 rounded-2xl px-4 py-3 text-xs text-[#776575]" role="status"><ShieldCheck size={17} className="shrink-0 text-[#9d4b6b]"/>Choose one of your verified Chogs to see your profile preview.</div>}
           <Form {...form}>

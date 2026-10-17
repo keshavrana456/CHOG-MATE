@@ -1,14 +1,14 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, BadgeCheck, FileText, Heart, Image as ImageIcon, MessageCircle, Mic, MoreHorizontal, Paperclip, Send, Sparkles, Video, X } from 'lucide-react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import {
   getDiscoverProfilesQueryKey, getGetMatchesQueryKey, getGetMessagesQueryKey,
   getGetMeQueryKey, getGetLikeInboxQueryKey,
   useBlockProfile, useDiscoverProfiles, useGetMatches, useGetMessages,
   useGetLikeInbox, useGetMe, useReportProfile, useRequestMessageAttachmentUploadUrl, useSendMessage, useSwipeProfile, useUnmatchProfile,
 } from '@workspace/api-client-react';
-import { type DiscoverProfilesMode, type DiscoverProfilesParams, type Profile, ReportInputReason } from '@workspace/api-client-react';
+import { type DiscoverProfilesMode, type DiscoverProfilesParams, type LikeInboxItem, type Profile, ReportInputReason } from '@workspace/api-client-react';
 import { formatUnits, type Hex } from 'viem';
 import { useConnection, usePublicClient, useReadContract, useWriteContract } from 'wagmi';
 import { AppShell, ChogArtwork, EmptyState, Eyebrow, PageTitle, ProfileAvatar, QueryState } from '@/components/shared';
@@ -16,7 +16,6 @@ import { WalletConnectionDialog } from '@/components/wallet-connection-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { appConfig } from '@/lib/config';
 import { monadNetwork } from '@/lib/appkit';
-import { readManualTestFlow } from '@/lib/manual-test-profile';
 import { supabase } from '@/lib/supabase';
 
 function ReportControl({
@@ -111,7 +110,7 @@ function DiscoverCard({
       {profile.photoUrl && <img src={profile.photoUrl} alt={`Profile photo of ${profile.displayName}`} onError={handleMediaError} className="absolute inset-0 h-full w-full object-cover" />}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#211332e8] via-[#21133278] to-transparent px-6 pb-5 pt-24 text-white sm:px-8">
         <div className="flex items-end justify-between gap-3"><div className="min-w-0"><div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em] backdrop-blur"><BadgeCheck size={12} />Holder verified</div><h2 className="display truncate text-[34px] font-extrabold leading-none tracking-[-.05em]">{profile.displayName}</h2><p className="mt-1 text-sm text-white/85">@{profile.username} · {profile.age} · {profile.location}</p></div>
-          <div className="shrink-0 rounded-2xl border border-white/30 bg-white/15 px-3 py-2 text-center backdrop-blur"><span className="display block text-xl font-extrabold">{profile.compatibility ?? 0}%</span><span className="text-[9px] font-bold uppercase tracking-[.12em] text-white/75">compatibility</span></div>
+          <div className="shrink-0 rounded-2xl border border-white/30 bg-white/15 px-3 py-2 text-center backdrop-blur"><span className="display block text-xl font-extrabold">{profile.compatibility === null ? '—' : `${profile.compatibility}%`}</span><span className="text-[9px] font-bold uppercase tracking-[.12em] text-white/75">{profile.compatibility === null ? 'profile score' : 'compatibility'}</span></div>
         </div>
       </div>
       <div className="absolute right-4 top-4"><ReportControl profile={profile} canInteract={canInteract} onAuthRequired={onAuthRequired} /></div>
@@ -200,11 +199,13 @@ const chogTokenAbi = [
 function SuperLikeDialog({
   profile,
   walletAddress,
+  identityMode,
   onOpenChange,
   onConfirmed,
 }: {
   profile: Profile | null;
   walletAddress: string | null;
+  identityMode: 'wallet_connected' | 'address_only' | undefined;
   onOpenChange: (open: boolean) => void;
   onConfirmed: (transactionHash: Hex) => Promise<void>;
 }) {
@@ -215,7 +216,6 @@ function SuperLikeDialog({
   const [phase, setPhase] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const manualTestMode = Boolean(readManualTestFlow());
   const walletMatchesSession = Boolean(
     connection.address &&
     walletAddress &&
@@ -225,7 +225,7 @@ function SuperLikeDialog({
     connection.isConnected &&
     connection.chainId === monadNetwork.id &&
     walletMatchesSession &&
-    !manualTestMode,
+    identityMode === 'wallet_connected',
   );
   const decimals = useReadContract({
     address: appConfig.chogTokenAddress,
@@ -280,8 +280,12 @@ function SuperLikeDialog({
       await recordConfirmedTransfer(transactionHash);
       return;
     }
-    if (!canUseWallet || !connection.address || !walletMatchesSession || manualTestMode) {
-      setError('Connect the wallet used for this verified profile on Monad Mainnet. Manual test addresses cannot send transactions.');
+    if (!canUseWallet || !connection.address || !walletMatchesSession) {
+      setError(
+        identityMode === 'address_only'
+          ? 'Address-only accounts cannot send transactions. Connect and sign in with the wallet for this profile first.'
+          : 'Connect the wallet used for this verified profile on Monad Mainnet.',
+      );
       return;
     }
     if (!publicClient || decimals.isLoading || balance.isLoading) {
@@ -362,7 +366,7 @@ function SuperLikeDialog({
         </div>
         {!connection.isConnected && <p className="text-xs leading-5 text-[#8b8091]">Connect the wallet used for your CHOG MATE profile to continue.</p>}
         {connection.isConnected && connection.chainId !== monadNetwork.id && <p className="text-xs text-[#a34646]" role="alert">Switch your wallet to Monad Mainnet before sending.</p>}
-        {manualTestMode && <p className="text-xs leading-5 text-[#a34646]" role="alert">Manual address test mode cannot send real token transactions.</p>}
+        {identityMode === 'address_only' && <p className="text-xs leading-5 text-[#a34646]" role="alert">This address-only account can like and message, but cannot send $CHOG until its wallet is connected and verified.</p>}
         {phase && <p className="text-xs font-semibold text-[#7053a4]" role="status">{phase}</p>}
         {transactionHash && (
           <a href={`https://monadscan.com/tx/${transactionHash}`} target="_blank" rel="noreferrer" className="break-all text-xs font-semibold text-[#7047ff] underline">
@@ -416,6 +420,7 @@ export function DiscoverPage() {
   const [viewingProfile, setViewingProfile] = useState<Profile | null>(null);
   const [superLikeTarget, setSuperLikeTarget] = useState<Profile | null>(null);
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
   const swipe = useSwipeProfile();
   const me = useGetMe({ query: { queryKey: getGetMeQueryKey(), retry: false } });
   const canInteract = Boolean(
@@ -424,7 +429,7 @@ export function DiscoverPage() {
   );
   const params: DiscoverProfilesParams = useMemo(()=>({ mode, limit:20, ...(cursor ? { cursor } : {}) }),[cursor,mode]);
   const key = getDiscoverProfilesQueryKey(params);
-  const { data, isLoading, isError, refetch } = useDiscoverProfiles(params, { query: { queryKey:key, retry:false, enabled:canInteract } });
+  const { data, isLoading, isError, refetch } = useDiscoverProfiles(params, { query: { queryKey:key, retry:false } });
   const profiles = data?.profiles || [];
   useEffect(() => {
     if (canInteract) setWalletDialogOpen(false);
@@ -465,7 +470,8 @@ export function DiscoverPage() {
 
   function action(selected: 'pass'|'like'|'super_like') {
     if (!canInteract) {
-      setWalletDialogOpen(true);
+      if (me.data) navigate('/profile');
+      else setWalletDialogOpen(true);
       return;
     }
     const profile = profiles[profileIndex];
@@ -481,24 +487,22 @@ export function DiscoverPage() {
   }
   const currentCard = profiles[profileIndex];
   return <AppShell><div className="page-enter">
-    <PageTitle eyebrow="The good kind of scrolling" title="Find your people." description="Every profile here belongs to an eligible Chog holder. Choose the kind of connection that feels right." />
+     <PageTitle eyebrow="The good kind of scrolling" title="Find your people." description="Browse real Chog holders without signing in. Complete your profile to get compatibility scores and interact." />
      <div className="mb-6 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Connection type">{([{value:'discover',label:'All paths'},{value:'date',label:'Dating'},{value:'friends',label:'Friendship'},{value:'network',label:'Networking'},{value:'collab',label:'Collaboration'}] as {value:DiscoverProfilesMode;label:string}[]).map(item=><button key={item.value} onClick={()=>{setMode(item.value);setCursor(undefined);setToast('');}} className={`mode-tab shrink-0 rounded-full px-4 py-2.5 text-xs font-bold transition ${mode===item.value?'active':''}`} aria-pressed={mode===item.value} data-testid={`button-mode-${item.value}`}>{item.label}</button>)}</div>
     {toast && <div className="mx-auto mb-4 max-w-[620px] rounded-2xl border border-[#ded4f5] bg-white px-4 py-3 text-sm text-[#514177]" role="status" data-testid="status-swipe">{toast}<button className="float-right font-bold" onClick={()=>setToast('')} aria-label="Dismiss notification"><X size={16}/></button></div>}
-    {me.isLoading ? <div className="skeleton mx-auto h-[560px] max-w-[620px] rounded-[28px]" /> :
-    me.isError && !isUnauthorized(me.error) ? <QueryState loading={false} error retry={()=>void me.refetch()}><div/></QueryState> :
-    !canInteract ? <EmptyState title={me.data ? 'Finish your profile to discover.' : 'Connect your wallet to discover.'} detail={me.data ? 'Add your photo, age, location, bio, interests, hobbies, and skills to see eligible Chog holders and compatibility scores.' : 'Sign in with the wallet holding your verified Chog to see real, eligible profiles.'} action={me.data ? <Link href="/profile" className="button-primary inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold" data-testid="link-complete-profile">Complete profile <ArrowRight size={15}/></Link> : <button onClick={()=>setWalletDialogOpen(true)} className="button-primary rounded-full px-5 py-3 text-sm font-bold" data-testid="button-connect-to-discover">Connect wallet</button>} /> :
-    <QueryState loading={isLoading} error={isError} retry={()=>void refetch()}>
+     {me.isError && !isUnauthorized(me.error) && <p className="mx-auto mb-4 max-w-[620px] rounded-2xl border border-[#ead8ce] bg-[#fff8f1] px-4 py-3 text-sm text-[#755247]" role="status">Your account status could not be loaded. Public profiles are still available; sign-in may be unavailable.</p>}
+     <QueryState loading={isLoading} error={isError} retry={()=>void refetch()}>
       {currentCard ? <>
         <DiscoverCard profile={currentCard} onAction={selected => action(selected)} onOpenProfile={()=>setViewingProfile(currentCard)} onAuthRequired={()=>setWalletDialogOpen(true)} onMediaError={()=>{setToast('A profile or Chog image could not be loaded. This card was skipped for this session.');setProfileIndex(index=>index+1);}} canInteract={canInteract} pending={swipe.isPending} />
         <div className="mx-auto mt-5 flex max-w-[620px] items-center justify-between"><p className="text-xs text-[#92869a]">Real holders. Real possibilities.</p>{profileIndex >= profiles.length && data?.nextCursor && <button onClick={()=>{setCursor(data.nextCursor || undefined);setProfileIndex(0);}} className="button-soft inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold" data-testid="button-load-more">More people <ArrowRight size={14}/></button>}</div>
       </> : data?.nextCursor ? <EmptyState mark="cm" title="Looking a little further." detail="No complete profiles in this group yet. Continue to the next set of real Chog holders." action={<button onClick={()=>setCursor(data.nextCursor || undefined)} className="button-soft rounded-full px-5 py-2.5 text-sm font-bold" data-testid="button-load-more">Continue discovery</button>} /> :
       <EmptyState mark="cm" title="No one new, for now." detail="You’ve reached the end of the complete, eligible Chog holders available to discover. Check back as the community grows." action={<button onClick={()=>{setProfileIndex(0);void refetch();}} className="button-soft rounded-full px-5 py-2.5 text-sm font-bold" data-testid="button-refresh-discovery">Check again</button>} />}
     </QueryState>
-    }
     <ProfileDetailsDialog profile={viewingProfile} open={Boolean(viewingProfile)} onOpenChange={open=>{if(!open)setViewingProfile(null);}}/>
     <SuperLikeDialog
       profile={superLikeTarget}
       walletAddress={me.data?.walletAddress ?? null}
+      identityMode={me.data?.identityMode}
       onOpenChange={open=>{if(!open)setSuperLikeTarget(null);}}
       onConfirmed={async transactionHash => {
         if (!superLikeTarget) throw new Error('The selected profile is no longer available.');
@@ -548,8 +552,6 @@ export function MatchesPage() {
     </QueryState>
   </div></AppShell>;
 }
-
-type LikeInboxItem = NonNullable<ReturnType<typeof useGetLikeInbox>["data"]>[number];
 
 function IncomingLikeCard({ item, onHandled }: { item: LikeInboxItem; onHandled: () => void }) {
   const [notice, setNotice] = useState("");

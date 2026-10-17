@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
+  CreateAddressSessionBody,
+  CreateAddressSessionResponse,
   CreateAuthChallengeBody,
   CreateAuthChallengeResponse,
   VerifyWalletBody,
@@ -9,6 +11,7 @@ import { getAddress } from "viem";
 import { getOwnedChogs } from "../lib/chogs";
 import {
   clearWalletSessionCookie,
+  createWalletAuthSession,
   makeWalletChallenge,
   setWalletSessionCookie,
   verifyWalletChallenge,
@@ -71,6 +74,7 @@ router.post("/auth/verify", async (req, res): Promise<void> => {
         userId: verified.userId,
         walletAddress: verified.walletAddress,
         hasChog: chogs.length > 0,
+        identityMode: "wallet_connected",
         accessToken: verified.accessToken,
         refreshToken: verified.refreshToken,
         expiresIn: verified.expiresIn,
@@ -87,6 +91,78 @@ router.post("/auth/verify", async (req, res): Promise<void> => {
     }
     res.status(503).json({
       error: "We couldn't verify your wallet right now. Please try again shortly.",
+    });
+  }
+});
+
+router.post("/auth/address", async (req, res): Promise<void> => {
+  const parsed = CreateAddressSessionBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter a valid wallet address." });
+    return;
+  }
+
+  try {
+    const walletAddress = getAddress(parsed.data.walletAddress);
+    const chogs = await getOwnedChogs(walletAddress);
+    if (chogs.length === 0) {
+      res.status(403).json({
+        error: "This address must currently own a Chog Genesis NFT to create an account.",
+      });
+      return;
+    }
+
+    const account = await createWalletAuthSession(walletAddress);
+    const admin = getSupabaseAdmin();
+    const { data: existingUser, error: existingUserError } = await admin
+      .from("users")
+      .select("id")
+      .eq("wallet_address", account.walletAddress.toLowerCase())
+      .maybeSingle();
+    if (existingUserError) {
+      throw new Error("The CHOG MATE account could not be loaded.");
+    }
+    if (existingUser && existingUser.id !== account.userId) {
+      res.status(409).json({
+        error: "This wallet is already linked to a different CHOG MATE account. Contact support to recover it.",
+      });
+      return;
+    }
+
+    const { error: userError } = await admin.from("users").upsert(
+      {
+        id: account.userId,
+        wallet_address: account.walletAddress.toLowerCase(),
+        last_seen: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    );
+    if (userError) throw new Error("The CHOG MATE account could not be saved.");
+
+    setWalletSessionCookie(
+      res,
+      account.userId,
+      account.walletAddress,
+      "address_only",
+    );
+    res.json(
+      CreateAddressSessionResponse.parse({
+        userId: account.userId,
+        walletAddress: account.walletAddress,
+        hasChog: true,
+        identityMode: "address_only",
+        accessToken: account.accessToken,
+        refreshToken: account.refreshToken,
+        expiresIn: account.expiresIn,
+      }),
+    );
+  } catch (error) {
+    req.log.warn(
+      { errorType: error instanceof Error ? error.name : "UnknownError" },
+      "Address-only account sign-in failed",
+    );
+    res.status(503).json({
+      error: "We couldn't verify or open this account right now. Please try again shortly.",
     });
   }
 });

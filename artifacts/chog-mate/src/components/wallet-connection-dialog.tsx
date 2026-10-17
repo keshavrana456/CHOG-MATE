@@ -24,10 +24,12 @@ export function WalletConnectionDialog({
             Connect to make a connection.
           </DialogTitle>
           <DialogDescription className="text-sm leading-6 text-[#82778c]">
-            Browse profiles freely. Connect and verify a Chog holder wallet to like,
-            pass, match, or message.
+            Browse profiles freely. Sign in with a connected wallet, or verify
+            Chog ownership by address to create a persistent social account.
+            Address-only accounts can interact, but cannot send blockchain transactions.
           </DialogDescription>
         </DialogHeader>
+        <div className="max-h-[min(70vh,680px)] overflow-y-auto pr-1">
         <Suspense
           fallback={
             <div className="skeleton h-14 w-52 rounded-full" role="status">
@@ -35,8 +37,9 @@ export function WalletConnectionDialog({
             </div>
           }
         >
-          <WalletAuthPanel showManualAddressScan={false} />
+          <WalletAuthPanel showManualAddressScan />
         </Suspense>
+        </div>
       </DialogContent>
     </Dialog>
   );

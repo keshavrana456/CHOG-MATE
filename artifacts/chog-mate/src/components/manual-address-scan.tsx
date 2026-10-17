@@ -1,12 +1,18 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Activity, BadgeCheck, Check, RefreshCw } from "lucide-react";
 import { isAddress } from "viem";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
+  getGetMeQueryKey,
+  getGetMeQueryOptions,
   getGetNftOwnershipQueryKey,
+  getMe,
+  useCreateAddressSession,
   useGetNftOwnership,
 } from "@workspace/api-client-react";
 import { ChogArtwork } from "@/components/shared";
+import { supabase } from "@/lib/supabase";
 import {
   clearManualTestFlow,
   readManualTestFlow,
@@ -23,6 +29,9 @@ export default function ManualAddressScan() {
     restoredFlow?.selectedTokenId ?? "",
   );
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const createAddressSession = useCreateAddressSession();
+  const [accountError, setAccountError] = useState("");
   const ownership = useGetNftOwnership(scanAddress, {
     query: {
       enabled: Boolean(scanAddress),
@@ -86,11 +95,62 @@ export default function ManualAddressScan() {
     setScanNonce((value) => value + 1);
   }
 
+  async function continueWithSelectedChog() {
+    setAccountError("");
+    if (!selectedTestChog || !chogs.some((chog) => chog.tokenId === selectedTestChog)) {
+      setAccountError("Select a Chog that is currently verified for this address.");
+      return;
+    }
+    if (!supabase) {
+      setAccountError("Account sign-in is not configured. Please try again later.");
+      return;
+    }
+    try {
+      const session = await createAddressSession.mutateAsync({
+        data: { walletAddress: scanAddress },
+      });
+      const { error } = await supabase.auth.setSession({
+        access_token: session.accessToken,
+        refresh_token: session.refreshToken,
+      });
+      if (error) throw error;
+      clearManualTestFlow();
+      await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+
+      let destination = `/profile?chog=${encodeURIComponent(selectedTestChog)}`;
+      try {
+        const current = await queryClient.fetchQuery({
+          ...getGetMeQueryOptions(),
+          queryFn: () => getMe(),
+          staleTime: 0,
+        });
+        if (current.hasProfile && current.profile) destination = "/discover";
+      } catch {
+        // Continue to profile setup; the page will show a retry state if the
+        // account profile cannot be loaded.
+      }
+      navigate(destination);
+    } catch (error) {
+      const apiData =
+        error && typeof error === "object" && "data" in error
+          ? (error as { data?: unknown }).data
+          : null;
+      const message =
+        apiData && typeof apiData === "object" && "error" in apiData &&
+        typeof (apiData as { error?: unknown }).error === "string"
+          ? (apiData as { error: string }).error
+          : error instanceof Error
+            ? error.message
+            : "We couldn't open this account. Please try again.";
+      setAccountError(message);
+    }
+  }
+
   return (
     <section
       className="surface w-full max-w-xl rounded-[24px] p-4 sm:p-5"
-      aria-label="Test-mode Chog wallet scan"
-      data-testid="panel-test-wallet-scan"
+      aria-label="Use a wallet address"
+      data-testid="panel-address-wallet-scan"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -98,19 +158,24 @@ export default function ManualAddressScan() {
             OR
           </p>
           <h2 className="display mt-1 text-lg font-extrabold text-[#24133f]">
-            Enter Wallet Address
+            Use Wallet Address
           </h2>
         </div>
         <span
-          className="rounded-full border border-[#e7c98b] bg-[#fff5da] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[.12em] text-[#79521a]"
-          data-testid="badge-test-mode"
+          className="rounded-full border border-[#cfe2cb] bg-[#eef8ea] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[.12em] text-[#447a43]"
+          data-testid="badge-address-only"
         >
-          TEST MODE
+          ADDRESS-ONLY
         </span>
       </div>
       <p className="mt-2 text-xs leading-5 text-[#82778c]">
-        Read-only ownership check. This address is not connected; no signature
-        or transaction is requested.
+        Verify current Chog ownership and create a persistent social account
+        without signing. This does not connect the wallet or authorize transactions.
+      </p>
+      <p className="mt-2 rounded-xl bg-[#fff6e8] px-3 py-2 text-[11px] leading-5 text-[#79521a]">
+        An address-only account does not prove you control that address. Anyone
+        can enter a public address; connect and sign with your wallet when you
+        need proof of control or want to send a transaction.
       </p>
       <form
         onSubmit={scanAddressForChogs}
@@ -192,6 +257,15 @@ export default function ManualAddressScan() {
           </button>
         </div>
       )}
+      {accountError && (
+        <p
+          role="alert"
+          className="mt-3 rounded-2xl border border-[#edc8bc] bg-[#fff2ec] px-4 py-3 text-sm text-[#914c3c]"
+          data-testid="status-address-account-error"
+        >
+          {accountError}
+        </p>
+      )}
       {scanAddress &&
         ownershipMatchesAddress &&
         !ownership.isFetching &&
@@ -272,20 +346,20 @@ export default function ManualAddressScan() {
               className="mt-3 rounded-2xl bg-[#eef8ea] p-3"
               data-testid="status-test-chog-selected"
             >
-              <p
-                className="text-xs leading-5 text-[#447a43]"
-                role="status"
-              >
-                Selected for this read-only test. The address is not connected
-                and does not prove control of the wallet.
+              <p className="text-xs leading-5 text-[#447a43]" role="status">
+                NFT ownership verified. The wallet is not connected; transactions
+                will require a separate wallet connection.
               </p>
               <button
                 type="button"
-                onClick={() => navigate("/profile?mode=test")}
-                className="button-primary mt-3 inline-flex min-h-10 items-center justify-center rounded-full px-5 text-xs font-bold"
-                data-testid="button-continue-test-chog"
+                onClick={() => void continueWithSelectedChog()}
+                disabled={createAddressSession.isPending}
+                className="button-primary mt-3 inline-flex min-h-10 items-center justify-center rounded-full px-5 text-xs font-bold disabled:opacity-60"
+                data-testid="button-continue-address-chog"
               >
-                Continue with Chog #{selectedTestChog}
+                {createAddressSession.isPending
+                  ? "Verifying ownership…"
+                  : `Continue with Chog #${selectedTestChog}`}
               </button>
             </div>
           )}

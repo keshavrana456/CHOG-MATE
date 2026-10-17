@@ -28,7 +28,7 @@ import {
   syncVerifiedChogs,
 } from "../lib/social-data";
 import { getSupabaseAdmin } from "../lib/supabase";
-import { requireWalletSession } from "../lib/wallet-auth";
+import { readWalletSession, requireWalletSession } from "../lib/wallet-auth";
 
 const router: IRouter = Router();
 
@@ -63,6 +63,7 @@ router.get("/me", async (req, res): Promise<void> => {
       GetMeResponse.parse({
         walletAddress: session.walletAddress,
         hasChog: chogs.length > 0,
+        identityMode: session.identityMode,
         hasProfile: Boolean(storedProfile),
         chogs,
         selectedChogTokenId: selected?.tokenId ?? null,
@@ -243,8 +244,7 @@ router.patch("/me/chog", async (req, res): Promise<void> => {
 });
 
 router.get("/discover", async (req, res): Promise<void> => {
-  const session = requireWalletSession(req, res);
-  if (!session) return;
+  const session = readWalletSession(req);
   const parsed = DiscoverProfilesQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "Those discovery settings are not valid." });
@@ -253,40 +253,33 @@ router.get("/discover", async (req, res): Promise<void> => {
 
   try {
     const admin = getSupabaseAdmin();
-    const currentProfile = await loadProfileBundle(session.userId);
-    if (
-      !currentProfile ||
-      !isCompleteDiscoverableProfile(currentProfile, false) ||
-      !isAddress(currentProfile.user.wallet_address) ||
-      currentProfile.user.wallet_address.toLowerCase() !==
-        session.walletAddress.toLowerCase()
-    ) {
-      res.status(409).json({
-        error: "Complete your profile and verify a Chog to start discovering.",
-      });
-      return;
-    }
-    const currentOwnsSelected = await isCurrentChogOwner(
-      getAddress(currentProfile.user.wallet_address),
-      currentProfile.chog.tokenId,
-    );
-    if (currentOwnsSelected === null) {
-      res.status(503).json({
-        error: "Ownership checks are temporarily unavailable. Please try again.",
-      });
-      return;
-    }
-    if (!currentOwnsSelected) {
-      res.status(409).json({
-        error: "Your selected Chog is no longer verified. Update your profile to continue.",
-      });
-      return;
+    let currentProfile: Awaited<ReturnType<typeof loadProfileBundle>> = null;
+    if (session) {
+      const ownBundle = await loadProfileBundle(session.userId);
+      if (
+        ownBundle &&
+        isCompleteDiscoverableProfile(ownBundle, false) &&
+        isAddress(ownBundle.user.wallet_address) &&
+        ownBundle.user.wallet_address.toLowerCase() === session.walletAddress.toLowerCase()
+      ) {
+        const currentOwnsSelected = await isCurrentChogOwner(
+          getAddress(ownBundle.user.wallet_address),
+          ownBundle.chog.tokenId,
+        );
+        if (currentOwnsSelected === null) {
+          res.status(503).json({
+            error: "Ownership checks are temporarily unavailable. Please try again.",
+          });
+          return;
+        }
+        if (currentOwnsSelected) currentProfile = ownBundle;
+      }
     }
     const limit = parsed.data.limit ?? 12;
     const offset = parseCursor(parsed.data.cursor);
     const excluded = new Set<string>();
     if (session) {
-      const [outBlocks, inBlocks, passes, likes, matchesA, matchesB] =
+      const [outBlocks, inBlocks, passes, likes, superLikes, matchesA, matchesB] =
         await Promise.all([
           admin
             .from("blocks")
@@ -299,6 +292,10 @@ router.get("/discover", async (req, res): Promise<void> => {
           admin.from("passes").select("to_user_id").eq("from_user_id", session.userId),
           admin.from("likes").select("to_user_id").eq("from_user_id", session.userId),
           admin
+            .from("super_likes")
+            .select("to_user_id")
+            .eq("from_user_id", session.userId),
+          admin
             .from("matches")
             .select("user_b")
             .eq("user_a", session.userId)
@@ -310,7 +307,7 @@ router.get("/discover", async (req, res): Promise<void> => {
             .eq("status", "active"),
         ]);
       if (
-        [outBlocks, inBlocks, passes, likes, matchesA, matchesB].some(
+          [outBlocks, inBlocks, passes, likes, superLikes, matchesA, matchesB].some(
           (result) => result.error,
         )
       ) {
@@ -322,6 +319,7 @@ router.get("/discover", async (req, res): Promise<void> => {
       for (const row of inBlocks.data ?? []) excluded.add(row.blocker_id);
       for (const row of passes.data ?? []) excluded.add(row.to_user_id);
       for (const row of likes.data ?? []) excluded.add(row.to_user_id);
+      for (const row of superLikes.data ?? []) excluded.add(row.to_user_id);
       for (const row of matchesA.data ?? []) excluded.add(row.user_b);
       for (const row of matchesB.data ?? []) excluded.add(row.user_a);
     }
@@ -352,9 +350,7 @@ router.get("/discover", async (req, res): Promise<void> => {
       if (
         !isCompleteDiscoverableProfile(bundle) ||
         !isAddress(bundle.user.wallet_address) ||
-        (session &&
-          bundle.user.wallet_address.toLowerCase() ===
-            session.walletAddress.toLowerCase())
+        (session && bundle.user.id === session.userId)
       ) {
         continue;
       }

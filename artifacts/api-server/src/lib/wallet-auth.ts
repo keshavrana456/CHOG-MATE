@@ -19,6 +19,7 @@ interface Challenge {
 export interface WalletSession {
   userId: string;
   walletAddress: `0x${string}`;
+  identityMode: "wallet_connected" | "address_only";
   expiresAt: number;
 }
 
@@ -87,44 +88,43 @@ export async function verifyWalletChallenge(
   }
   challenges.delete(normalized.toLowerCase());
 
+  return createWalletAuthSession(normalized);
+}
+
+export async function createWalletAuthSession(
+  walletAddress: string,
+): Promise<{
+  userId: string;
+  walletAddress: `0x${string}`;
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}> {
+  const normalized = getAddress(walletAddress);
   const credentials = getWalletAuthCredentials(normalized);
   const admin = getSupabaseAdmin();
-  let authUserId: string | undefined;
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email: credentials.email,
     password: credentials.password,
     email_confirm: true,
     user_metadata: { wallet_address: normalized.toLowerCase() },
   });
-  if (!createError && created.user) {
-    authUserId = created.user.id;
-  } else {
-    const publicClient = getSupabasePublic();
-    const { data: signedIn, error: signInError } =
-      await publicClient.auth.signInWithPassword(credentials);
-    if (signInError || !signedIn.user || !signedIn.session) {
-      throw new Error("Wallet account could not be established");
-    }
-    authUserId = signedIn.user.id;
-    const result = {
-      userId: authUserId,
-      walletAddress: normalized,
-      accessToken: signedIn.session.access_token,
-      refreshToken: signedIn.session.refresh_token,
-      expiresIn: signedIn.session.expires_in ?? 3600,
-    };
-    return result;
-  }
 
   const publicClient = getSupabasePublic();
   const { data: signedIn, error: signInError } =
     await publicClient.auth.signInWithPassword(credentials);
   if (signInError || !signedIn.user || !signedIn.session) {
+    if (createError) {
+      throw new Error("Wallet account could not be established");
+    }
     throw new Error("Wallet account could not be established");
+  }
+  if (created.user && created.user.id !== signedIn.user.id) {
+    throw new Error("Wallet account identity did not match");
   }
 
   return {
-    userId: authUserId,
+    userId: signedIn.user.id,
     walletAddress: normalized,
     accessToken: signedIn.session.access_token,
     refreshToken: signedIn.session.refresh_token,
@@ -136,10 +136,12 @@ export function setWalletSessionCookie(
   response: Response,
   userId: string,
   walletAddress: `0x${string}`,
+  identityMode: WalletSession["identityMode"] = "wallet_connected",
 ): void {
   const session: WalletSession = {
     userId,
     walletAddress,
+    identityMode,
     expiresAt: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
   };
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
@@ -181,6 +183,10 @@ export function readWalletSession(request: Request): WalletSession | null {
     ) {
       return null;
     }
+    if (!isWalletIdentityMode(session.identityMode)) {
+      // Existing signed-wallet cookies predate identity-mode tracking.
+      session.identityMode = "wallet_connected";
+    }
     return session;
   } catch {
     return null;
@@ -197,6 +203,23 @@ export function requireWalletSession(
     return null;
   }
   return session;
+}
+
+export function requireConnectedWalletSession(
+  request: Request,
+  response: Response,
+): WalletSession | null {
+  const session = requireWalletSession(request, response);
+  if (!session) return null;
+  if (session.identityMode !== "wallet_connected") {
+    response.status(403).json({ error: "Connect your wallet to continue." });
+    return null;
+  }
+  return session;
+}
+
+function isWalletIdentityMode(value: unknown): value is WalletSession["identityMode"] {
+  return value === "wallet_connected" || value === "address_only";
 }
 
 function sign(payload: string): string {
