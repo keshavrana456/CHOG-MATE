@@ -11,6 +11,7 @@ export interface DbProfile {
   gender: string | null;
   age: number | null;
   bio: string | null;
+  photo_url: string | null;
   location: string | null;
   timezone: string | null;
   looking_for: string[];
@@ -258,6 +259,7 @@ export function profileToApi(
     gender: bundle.profile.gender,
     age: includeAge ? bundle.profile.age : null,
     walletAddress: bundle.user.wallet_address,
+    photoUrl: bundle.profile.photo_url,
     bio: bundle.profile.bio,
     location: bundle.profile.location,
     timezone: bundle.profile.timezone,

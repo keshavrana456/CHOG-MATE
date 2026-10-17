@@ -22,6 +22,11 @@ export interface Profile {
      */
   age: number | null;
   walletAddress: string;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  photoUrl: string | null;
   /** @nullable */
   bio?: string | null;
   /** @nullable */

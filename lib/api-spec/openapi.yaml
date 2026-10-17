@@ -245,6 +245,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DiscoveryPage"
+        "401":
+          description: Wallet session required
+        "409":
+          description: The signed-in profile is incomplete or its Chog is no longer valid
+        "503":
+          description: Profile data or ownership checks are temporarily unavailable
   /swipes:
     post:
       operationId: swipeProfile
@@ -500,7 +506,7 @@ components:
         rarity: { type: ["number", "null"], minimum: 0, maximum: 100 }
     Profile:
       type: object
-      required: [userId, username, displayName, name, gender, age, walletAddress, chog, interests, hobbies, skills, languages, lookingFor]
+      required: [userId, username, displayName, name, gender, age, walletAddress, photoUrl, chog, interests, hobbies, skills, languages, lookingFor]
       properties:
         userId: { type: string, format: uuid }
         username: { type: string }
@@ -509,6 +515,7 @@ components:
         gender: { type: ["string", "null"] }
         age: { type: ["integer", "null"], minimum: 18, maximum: 120 }
         walletAddress: { type: string }
+        photoUrl: { type: ["string", "null"], format: uri, maxLength: 2048 }
         bio: { type: ["string", "null"] }
         location: { type: ["string", "null"] }
         timezone: { type: ["string", "null"] }
@@ -554,6 +561,7 @@ components:
         name: { type: ["string", "null"], maxLength: 80 }
         gender: { type: ["string", "null"], maxLength: 50 }
         age: { type: ["integer", "null"], minimum: 18, maximum: 120 }
+        photoUrl: { type: ["string", "null"], format: uri, maxLength: 2048, pattern: "^https?://" }
         bio: { type: ["string", "null"], maxLength: 500 }
         location: { type: ["string", "null"], maxLength: 100 }
         timezone: { type: ["string", "null"], maxLength: 100 }

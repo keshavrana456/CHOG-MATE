@@ -179,9 +179,9 @@
 .home-text-link:hover { color:#762442;transform:translateX(2px); }
 .home-step { transition:transform .22s,box-shadow .22s; }
 .home-step:hover { transform:translateY(-3px);box-shadow:0 20px 42px rgba(100,42,63,.12); }
-.home-blind { position:relative;background:linear-gradient(112deg,rgba(255,239,242,.98),rgba(255,247,241,.98) 68%,rgba(250,231,237,.98)); }
-.home-blind::before { content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(190,88,124,.15) 1px,transparent 1px);background-size:20px 20px;opacity:.32;mask-image:linear-gradient(90deg,black,transparent 65%); }
-.home-blind-visual img { display:block;width:100%;max-width:270px;height:auto;object-fit:contain; }
+.home-visible { position:relative;background:linear-gradient(112deg,rgba(255,239,242,.98),rgba(255,247,241,.98) 68%,rgba(250,231,237,.98)); }
+.home-visible::before { content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(190,88,124,.15) 1px,transparent 1px);background-size:20px 20px;opacity:.32;mask-image:linear-gradient(90deg,black,transparent 65%); }
+.home-visible-visual img { display:block;width:100%;max-width:270px;height:auto;object-fit:contain; }
 .home-final-cta { position:relative;overflow:hidden;border:1px solid rgba(174,73,107,.15);background:linear-gradient(140deg,rgba(255,240,243,.98),rgba(255,248,243,.98) 55%,rgba(250,229,237,.98));box-shadow:0 16px 40px rgba(100,42,63,.08); }
 .home-final-cta::before,.home-final-cta::after { content:"";position:absolute;width:220px;height:220px;border-radius:50%;background:rgba(215,105,145,.13);filter:blur(35px); }
 .home-final-cta::before { left:-80px;top:-110px; }
@@ -210,7 +210,7 @@ select option { background:#fffaf6;color:#442d35; }
   .chat-panel { height:min(660px,calc(100dvh - 270px));min-height:400px; }
   .chat-conversation-list { max-height:110px;overflow-y:hidden; }
   .home-hero-art { min-height:330px; }
-  .home-blind-visual img { max-width:230px; }
+  .home-visible-visual img { max-width:230px; }
 }
 @keyframes pageIn { from { opacity:0;transform:translateY(9px) } to { opacity:1;transform:translateY(0) } }
 @keyframes pulseSoft { 0%,100% { opacity:.6;transform:scale(.98) } 50% { opacity:1;transform:scale(1.02) } }

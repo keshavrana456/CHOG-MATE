@@ -28,7 +28,7 @@ import {
   syncVerifiedChogs,
 } from "../lib/social-data";
 import { getSupabaseAdmin } from "../lib/supabase";
-import { readWalletSession, requireWalletSession } from "../lib/wallet-auth";
+import { requireWalletSession } from "../lib/wallet-auth";
 
 const router: IRouter = Router();
 
@@ -133,6 +133,9 @@ router.put("/me/profile", async (req, res): Promise<void> => {
         gender: parsed.data.gender ?? null,
         age: parsed.data.age ?? null,
         bio: parsed.data.bio ?? null,
+        ...(parsed.data.photoUrl !== undefined
+          ? { photo_url: parsed.data.photoUrl }
+          : {}),
         location: parsed.data.location ?? null,
         timezone: parsed.data.timezone ?? null,
         interests: parsed.data.interests,
@@ -240,7 +243,8 @@ router.patch("/me/chog", async (req, res): Promise<void> => {
 });
 
 router.get("/discover", async (req, res): Promise<void> => {
-  const session = readWalletSession(req);
+  const session = requireWalletSession(req, res);
+  if (!session) return;
   const parsed = DiscoverProfilesQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "Those discovery settings are not valid." });
@@ -249,9 +253,35 @@ router.get("/discover", async (req, res): Promise<void> => {
 
   try {
     const admin = getSupabaseAdmin();
-    const currentProfile = session
-      ? await loadProfileBundle(session.userId)
-      : null;
+    const currentProfile = await loadProfileBundle(session.userId);
+    if (
+      !currentProfile ||
+      !isCompleteDiscoverableProfile(currentProfile, false) ||
+      !isAddress(currentProfile.user.wallet_address) ||
+      currentProfile.user.wallet_address.toLowerCase() !==
+        session.walletAddress.toLowerCase()
+    ) {
+      res.status(409).json({
+        error: "Complete your profile and verify a Chog to start discovering.",
+      });
+      return;
+    }
+    const currentOwnsSelected = await isCurrentChogOwner(
+      getAddress(currentProfile.user.wallet_address),
+      currentProfile.chog.tokenId,
+    );
+    if (currentOwnsSelected === null) {
+      res.status(503).json({
+        error: "Ownership checks are temporarily unavailable. Please try again.",
+      });
+      return;
+    }
+    if (!currentOwnsSelected) {
+      res.status(409).json({
+        error: "Your selected Chog is no longer verified. Update your profile to continue.",
+      });
+      return;
+    }
     const limit = parsed.data.limit ?? 12;
     const offset = parseCursor(parsed.data.cursor);
     const excluded = new Set<string>();
@@ -316,15 +346,7 @@ router.get("/discover", async (req, res): Promise<void> => {
       reasons: string[];
       lastSeen: string;
     }> = [];
-    const compatibilityProfile =
-      currentProfile &&
-      isCompleteDiscoverableProfile(currentProfile) &&
-      isAddress(currentProfile.user.wallet_address)
-        ? await isCurrentChogOwner(
-            getAddress(currentProfile.user.wallet_address),
-            currentProfile.chog.tokenId,
-          ).then((ownsChog) => ownsChog ? currentProfile : null)
-        : null;
+    const compatibilityProfile = currentProfile;
 
     for (const [userId, bundle] of bundles) {
       if (
@@ -410,7 +432,7 @@ router.get("/discover", async (req, res): Promise<void> => {
             bundle,
             compatibility,
             reasons,
-            parsed.data.mode === "date",
+            true,
           ),
         ),
         nextCursor: hasMoreCandidates ? String(offset + pageSize) : null,
@@ -423,22 +445,53 @@ router.get("/discover", async (req, res): Promise<void> => {
 
 function isCompleteDiscoverableProfile(
   bundle: NonNullable<Awaited<ReturnType<typeof loadProfileBundle>>>,
+  requireVisible = true,
 ): boolean {
   const { profile, user, chog } = bundle;
   return (
-    profile.profile_visible &&
+    (!requireVisible || profile.profile_visible) &&
     typeof profile.username === "string" &&
     /^[a-zA-Z0-9_]{2,24}$/.test(profile.username) &&
     typeof profile.display_name === "string" &&
     profile.display_name.trim().length > 0 &&
+    typeof profile.age === "number" &&
+    Number.isInteger(profile.age) &&
+    profile.age >= 18 &&
+    profile.age <= 120 &&
+    typeof profile.bio === "string" &&
+    profile.bio.trim().length > 0 &&
+    isHttpUrl(profile.photo_url) &&
+    typeof profile.location === "string" &&
+    profile.location.trim().length > 0 &&
     profile.active_chog_token_id === chog.tokenId &&
     Array.isArray(profile.looking_for) &&
-    profile.looking_for.length > 0 &&
+    hasValues(profile.looking_for) &&
+    Array.isArray(profile.interests) &&
+    hasValues(profile.interests) &&
+    Array.isArray(profile.hobbies) &&
+    hasValues(profile.hobbies) &&
+    Array.isArray(profile.skills) &&
+    hasValues(profile.skills) &&
     chog.verified &&
     /^[0-9]+$/.test(chog.tokenId) &&
     chog.contractAddress.toLowerCase() === CHOG_CONTRACT_ADDRESS.toLowerCase() &&
-    chog.ownerWallet.toLowerCase() === user.wallet_address.toLowerCase()
+    chog.ownerWallet.toLowerCase() === user.wallet_address.toLowerCase() &&
+    isHttpUrl(chog.imageUrl)
   );
+}
+
+function hasValues(values: string[]): boolean {
+  return values.some((value) => typeof value === "string" && value.trim().length > 0);
+}
+
+function isHttpUrl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function parseCursor(cursor?: string): number {

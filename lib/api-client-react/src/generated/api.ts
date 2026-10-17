@@ -1010,7 +1010,7 @@ export const getDiscoverProfilesQueryKey = (params?: DiscoverProfilesParams,) =>
     }
 
 
-export const getDiscoverProfilesQueryOptions = <TData = Awaited<ReturnType<typeof discoverProfiles>>, TError = ErrorType<unknown>>(params?: DiscoverProfilesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof discoverProfiles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getDiscoverProfilesQueryOptions = <TData = Awaited<ReturnType<typeof discoverProfiles>>, TError = ErrorType<void>>(params?: DiscoverProfilesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof discoverProfiles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1029,14 +1029,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type DiscoverProfilesQueryResult = NonNullable<Awaited<ReturnType<typeof discoverProfiles>>>
-export type DiscoverProfilesQueryError = ErrorType<unknown>
+export type DiscoverProfilesQueryError = ErrorType<void>
 
 
 /**
  * @summary Return a page of eligible real Chog holders
  */
 
-export function useDiscoverProfiles<TData = Awaited<ReturnType<typeof discoverProfiles>>, TError = ErrorType<unknown>>(
+export function useDiscoverProfiles<TData = Awaited<ReturnType<typeof discoverProfiles>>, TError = ErrorType<void>>(
  params?: DiscoverProfilesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof discoverProfiles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {

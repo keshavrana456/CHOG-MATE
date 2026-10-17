@@ -196,6 +196,8 @@ export const getMeResponseChogsItemTraitsItemRarityMax = 100;
 export const getMeResponseProfileOneAgeMin = 18;
 export const getMeResponseProfileOneAgeMax = 120;
 
+export const getMeResponseProfileOnePhotoUrlMax = 2048;
+
 export const getMeResponseProfileOneChogTraitsItemRarityMin = 0;
 export const getMeResponseProfileOneChogTraitsItemRarityMax = 100;
 
@@ -234,6 +236,7 @@ export const GetMeResponse = zod.object({
   "gender": zod.string().nullable(),
   "age": zod.number().int().min(getMeResponseProfileOneAgeMin).max(getMeResponseProfileOneAgeMax).nullable(),
   "walletAddress": zod.string(),
+  "photoUrl": zod.string().url().max(getMeResponseProfileOnePhotoUrlMax).nullable(),
   "bio": zod.string().nullish(),
   "location": zod.string().nullish(),
   "timezone": zod.string().nullish(),
@@ -281,6 +284,10 @@ export const updateMeProfileBodyGenderMax = 50;
 export const updateMeProfileBodyAgeMin = 18;
 export const updateMeProfileBodyAgeMax = 120;
 
+export const updateMeProfileBodyPhotoUrlMax = 2048;
+
+
+export const updateMeProfileBodyPhotoUrlRegExp = new RegExp('^https?:/');
 export const updateMeProfileBodyBioMax = 500;
 
 export const updateMeProfileBodyLocationMax = 100;
@@ -315,6 +322,7 @@ export const UpdateMeProfileBody = zod.object({
   "name": zod.string().max(updateMeProfileBodyNameMax).nullish(),
   "gender": zod.string().max(updateMeProfileBodyGenderMax).nullish(),
   "age": zod.number().int().min(updateMeProfileBodyAgeMin).max(updateMeProfileBodyAgeMax).nullish(),
+  "photoUrl": zod.string().url().max(updateMeProfileBodyPhotoUrlMax).regex(updateMeProfileBodyPhotoUrlRegExp).nullish(),
   "bio": zod.string().max(updateMeProfileBodyBioMax).nullish(),
   "location": zod.string().max(updateMeProfileBodyLocationMax).nullish(),
   "timezone": zod.string().max(updateMeProfileBodyTimezoneMax).nullish(),
@@ -329,6 +337,8 @@ export const UpdateMeProfileBody = zod.object({
 
 export const updateMeProfileResponseAgeMin = 18;
 export const updateMeProfileResponseAgeMax = 120;
+
+export const updateMeProfileResponsePhotoUrlMax = 2048;
 
 export const updateMeProfileResponseChogTraitsItemRarityMin = 0;
 export const updateMeProfileResponseChogTraitsItemRarityMax = 100;
@@ -346,6 +356,7 @@ export const UpdateMeProfileResponse = zod.object({
   "gender": zod.string().nullable(),
   "age": zod.number().int().min(updateMeProfileResponseAgeMin).max(updateMeProfileResponseAgeMax).nullable(),
   "walletAddress": zod.string(),
+  "photoUrl": zod.string().url().max(updateMeProfileResponsePhotoUrlMax).nullable(),
   "bio": zod.string().nullish(),
   "location": zod.string().nullish(),
   "timezone": zod.string().nullish(),
@@ -408,6 +419,8 @@ export const DiscoverProfilesQueryParams = zod.object({
 export const discoverProfilesResponseProfilesItemAgeMin = 18;
 export const discoverProfilesResponseProfilesItemAgeMax = 120;
 
+export const discoverProfilesResponseProfilesItemPhotoUrlMax = 2048;
+
 export const discoverProfilesResponseProfilesItemChogTraitsItemRarityMin = 0;
 export const discoverProfilesResponseProfilesItemChogTraitsItemRarityMax = 100;
 
@@ -425,6 +438,7 @@ export const DiscoverProfilesResponse = zod.object({
   "gender": zod.string().nullable(),
   "age": zod.number().int().min(discoverProfilesResponseProfilesItemAgeMin).max(discoverProfilesResponseProfilesItemAgeMax).nullable(),
   "walletAddress": zod.string(),
+  "photoUrl": zod.string().url().max(discoverProfilesResponseProfilesItemPhotoUrlMax).nullable(),
   "bio": zod.string().nullish(),
   "location": zod.string().nullish(),
   "timezone": zod.string().nullish(),
@@ -467,6 +481,8 @@ export const SwipeProfileBody = zod.object({
 export const swipeProfileResponseMatchOneProfileAgeMin = 18;
 export const swipeProfileResponseMatchOneProfileAgeMax = 120;
 
+export const swipeProfileResponseMatchOneProfilePhotoUrlMax = 2048;
+
 export const swipeProfileResponseMatchOneProfileChogTraitsItemRarityMin = 0;
 export const swipeProfileResponseMatchOneProfileChogTraitsItemRarityMax = 100;
 
@@ -493,6 +509,7 @@ export const SwipeProfileResponse = zod.object({
   "gender": zod.string().nullable(),
   "age": zod.number().int().min(swipeProfileResponseMatchOneProfileAgeMin).max(swipeProfileResponseMatchOneProfileAgeMax).nullable(),
   "walletAddress": zod.string(),
+  "photoUrl": zod.string().url().max(swipeProfileResponseMatchOneProfilePhotoUrlMax).nullable(),
   "bio": zod.string().nullish(),
   "location": zod.string().nullish(),
   "timezone": zod.string().nullish(),
@@ -534,6 +551,8 @@ export const SwipeProfileResponse = zod.object({
 export const getMatchesResponseProfileAgeMin = 18;
 export const getMatchesResponseProfileAgeMax = 120;
 
+export const getMatchesResponseProfilePhotoUrlMax = 2048;
+
 export const getMatchesResponseProfileChogTraitsItemRarityMin = 0;
 export const getMatchesResponseProfileChogTraitsItemRarityMax = 100;
 
@@ -557,6 +576,7 @@ export const GetMatchesResponseItem = zod.object({
   "gender": zod.string().nullable(),
   "age": zod.number().int().min(getMatchesResponseProfileAgeMin).max(getMatchesResponseProfileAgeMax).nullable(),
   "walletAddress": zod.string(),
+  "photoUrl": zod.string().url().max(getMatchesResponseProfilePhotoUrlMax).nullable(),
   "bio": zod.string().nullish(),
   "location": zod.string().nullish(),
   "timezone": zod.string().nullish(),

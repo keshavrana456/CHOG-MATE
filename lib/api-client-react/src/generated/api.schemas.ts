@@ -125,6 +125,11 @@ export interface Profile {
      */
   age: number | null;
   walletAddress: string;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  photoUrl: string | null;
   /** @nullable */
   bio?: string | null;
   /** @nullable */
@@ -186,6 +191,12 @@ export interface ProfileInput {
      * @nullable
      */
   age?: number | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     * @pattern ^https?://
+     */
+  photoUrl?: string | null;
   /**
      * @maxLength 500
      * @nullable

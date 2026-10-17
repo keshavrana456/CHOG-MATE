@@ -35,6 +35,12 @@ export interface ProfileInput {
      */
   age?: number | null;
   /**
+     * @maxLength 2048
+     * @nullable
+     * @pattern ^https?://
+     */
+  photoUrl?: string | null;
+  /**
      * @maxLength 500
      * @nullable
      */

@@ -6,7 +6,7 @@ import {
   getDiscoverProfilesQueryKey, getGetMatchesQueryKey, getGetMessagesQueryKey,
   getGetMeQueryKey,
   useBlockProfile, useDiscoverProfiles, useGetMatches, useGetMessages,
-  useGetMe, useReportProfile, useRequestMessageAttachmentUploadUrl, useSendMessage, useSwipeProfile, useUnmatchProfile,
+  useGetMe, useReportProfile, useRequestMessageAttachmentUploadUrl, useSendMessage, useUnmatchProfile,
 } from '@workspace/api-client-react';
 import { type DiscoverProfilesMode, type DiscoverProfilesParams, type Profile, ReportInputReason } from '@workspace/api-client-react';
 import { AppShell, ChogArtwork, EmptyState, Eyebrow, PageTitle, ProfileAvatar, QueryState } from '@/components/shared';
@@ -65,6 +65,7 @@ function DiscoverCard({
   onAction,
   onOpenProfile,
   onAuthRequired,
+  onMediaError,
   canInteract,
   pending,
 }: {
@@ -72,10 +73,23 @@ function DiscoverCard({
   onAction: (action: 'pass'|'like'|'super_like') => void;
   onOpenProfile: () => void;
   onAuthRequired: () => void;
+  onMediaError: () => void;
   canInteract: boolean;
   pending: boolean;
 }) {
   const touchStart = useRef<number | null>(null);
+  const mediaErrorHandled = useRef(false);
+  const sections = [
+    { title: 'Looking For', values: profile.lookingFor },
+    { title: 'Interests', values: profile.interests },
+    { title: 'Hobbies', values: profile.hobbies },
+    { title: 'Skills', values: profile.skills },
+  ];
+  function handleMediaError() {
+    if (mediaErrorHandled.current) return;
+    mediaErrorHandled.current = true;
+    onMediaError();
+  }
   function finishTouch(event: React.TouchEvent<HTMLDivElement>) {
     if (touchStart.current === null) return;
     const distance = event.changedTouches[0]?.clientX - touchStart.current;
@@ -84,21 +98,25 @@ function DiscoverCard({
     else if (distance < -70) onAction('pass');
   }
   return <article className="surface mx-auto w-full max-w-[620px] overflow-hidden rounded-[30px]" data-testid={`card-profile-${profile.userId}`}>
-    <div onTouchStart={event=>{touchStart.current=event.touches[0]?.clientX ?? null;}} onTouchEnd={finishTouch} className="relative h-[310px] touch-pan-y sm:h-[390px]" data-testid={`swipe-surface-${profile.userId}`}>
-      <ChogArtwork chog={profile.chog} />
+    <div onTouchStart={event=>{touchStart.current=event.touches[0]?.clientX ?? null;}} onTouchEnd={finishTouch} className="relative h-[310px] touch-pan-y bg-[#e8ddff] sm:h-[390px]" data-testid={`swipe-surface-${profile.userId}`}>
+      {profile.photoUrl && <img src={profile.photoUrl} alt={`Profile photo of ${profile.displayName}`} onError={handleMediaError} className="absolute inset-0 h-full w-full object-cover" />}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#211332e8] via-[#21133278] to-transparent px-6 pb-5 pt-24 text-white sm:px-8">
-        <div className="flex items-end justify-between gap-3"><div><div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em] backdrop-blur"><BadgeCheck size={12} />Holder verified</div><h2 className="display text-[34px] font-extrabold leading-none tracking-[-.05em]">{profile.displayName}</h2><p className="mt-1 text-sm text-white/75">@{profile.username}{profile.location ? ` · ${profile.location}` : ''}</p></div>
-          {typeof profile.compatibility === 'number' && <div className="rounded-2xl border border-white/30 bg-white/15 px-3 py-2 text-center backdrop-blur"><span className="display block text-xl font-extrabold">{profile.compatibility}%</span><span className="text-[9px] font-bold uppercase tracking-[.12em] text-white/75">fit</span></div>}
+        <div className="flex items-end justify-between gap-3"><div className="min-w-0"><div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em] backdrop-blur"><BadgeCheck size={12} />Holder verified</div><h2 className="display truncate text-[34px] font-extrabold leading-none tracking-[-.05em]">{profile.displayName}</h2><p className="mt-1 text-sm text-white/85">@{profile.username} · {profile.age} · {profile.location}</p></div>
+          <div className="shrink-0 rounded-2xl border border-white/30 bg-white/15 px-3 py-2 text-center backdrop-blur"><span className="display block text-xl font-extrabold">{profile.compatibility ?? 0}%</span><span className="text-[9px] font-bold uppercase tracking-[.12em] text-white/75">compatibility</span></div>
         </div>
       </div>
       <div className="absolute right-4 top-4"><ReportControl profile={profile} canInteract={canInteract} onAuthRequired={onAuthRequired} /></div>
-      <span className="absolute bottom-3 right-4 text-[9px] font-semibold tracking-wide text-white/60 sm:hidden">Swipe to pass or like</span>
+      <span className="absolute bottom-3 right-4 text-[9px] font-semibold tracking-wide text-white/75 sm:hidden">Swipe to pass or like</span>
     </div>
     <div className="px-6 py-5 sm:px-8">
-      <p className="text-sm leading-6 text-[#6d6178]">{profile.bio || 'A verified holder, ready to make a new connection.'}</p>
-      <div className="mt-4 flex flex-wrap gap-2">{profile.lookingFor.map(item=><span key={item} className="rounded-full bg-[#f2ecff] px-3 py-1.5 text-[11px] font-bold text-[#6246b0]">{item}</span>)}</div>
-      {profile.whyYouMatch?.length ? <div className="mt-4 rounded-2xl bg-[#fff6e9] px-4 py-3"><p className="mb-1 text-[10px] font-bold uppercase tracking-[.13em] text-[#9b6b3c]">A reason to say hello</p><p className="text-sm leading-5 text-[#735a43]">{profile.whyYouMatch[0]}</p></div> : null}
-      {profile.interests.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{profile.interests.slice(0,5).map(item=><span key={item} className="rounded-full border border-[#e9e1d7] px-3 py-1 text-[11px] font-medium text-[#7c7185]">{item}</span>)}</div>}
+      {profile.name && <p className="mb-2 text-xs text-[#887b8d]"><span className="font-bold text-[#51445f]">Name</span> · {profile.name}</p>}
+      <p className="whitespace-pre-line text-sm leading-6 text-[#6d6178]">{profile.bio}</p>
+      {profile.whyYouMatch?.length ? <div className="mt-4 rounded-2xl bg-[#fff6e9] px-4 py-3"><p className="mb-2 text-[10px] font-bold uppercase tracking-[.13em] text-[#9b6b3c]">Why you match</p><ul className="space-y-1 text-sm leading-5 text-[#735a43]">{profile.whyYouMatch.slice(0, 3).map(reason=><li key={reason}>• {reason}</li>)}</ul></div> : null}
+      <div className="mt-5 grid gap-3 rounded-2xl border border-[#eadfe0] bg-[#fffaf6] p-3 sm:grid-cols-[112px_1fr] sm:items-center">
+        <div className="aspect-square overflow-hidden rounded-xl bg-[#e8ddff]">{profile.chog.imageUrl && <img src={profile.chog.imageUrl} alt={`Chog #${profile.chog.tokenId}`} onError={handleMediaError} className="h-full w-full object-cover"/>}</div>
+        <div className="min-w-0"><p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#9b6b3c]">Verified Chog Genesis</p><h3 className="display mt-1 text-xl font-extrabold text-[#38253a]">Chog #{profile.chog.tokenId}</h3><p className="mt-1 text-xs text-[#82778c]">Tier · {profile.chog.tier || 'Not listed'}</p><p className="mt-3 text-[9px] font-bold uppercase tracking-[.13em] text-[#9b6b3c]">Traits</p><div className="mt-1.5 flex flex-wrap gap-1.5">{profile.chog.traits?.length ? profile.chog.traits.map((trait,index)=><span key={`${trait.traitType}-${trait.traitValue}-${index}`} className="rounded-full bg-[#f2ecff] px-2.5 py-1 text-[10px] font-medium text-[#6246b0]">{trait.traitType}: {trait.traitValue}</span>) : <span className="text-[10px] text-[#82778c]">No traits listed</span>}</div></div>
+      </div>
+      <div className="mt-5 space-y-4">{sections.map(section=><section key={section.title} aria-label={section.title}><h3 className="text-[10px] font-bold uppercase tracking-[.13em] text-[#9b6b3c]">{section.title}</h3><div className="mt-2 flex flex-wrap gap-2">{section.values.map(item=><span key={item} className={`rounded-full px-3 py-1.5 text-[11px] font-medium ${section.title==='Looking For'?'bg-[#f2ecff] font-bold text-[#6246b0]':'border border-[#e9e1d7] text-[#7c7185]'}`}>{item}</span>)}</div></section>)}</div>
       <button type="button" onClick={onOpenProfile} className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-[#7047ff] underline-offset-4 hover:underline" data-testid={`button-open-profile-${profile.userId}`}>View full profile <ArrowRight size={13}/></button>
       <div className="mt-6 flex items-center justify-center gap-4">
         <button disabled={pending} onClick={()=>onAction('pass')} className="grid h-12 w-12 place-items-center rounded-full border border-[#e8dfd5] bg-white text-[#8a798a] transition hover:-translate-y-1 hover:border-[#e9a5af] hover:text-[#d35e70] disabled:opacity-50" aria-label="Pass" data-testid={`button-pass-${profile.userId}`}><X size={21}/></button>
@@ -147,41 +165,50 @@ export function DiscoverPage() {
   const [cursor, setCursor] = useState<string | undefined>();
   const [mode, setMode] = useState<DiscoverProfilesMode>('discover');
   const [toast, setToast] = useState('');
+  const [profileIndex, setProfileIndex] = useState(0);
   const [walletDialogOpen, setWalletDialogOpen] = useState(false);
   const [viewingProfile, setViewingProfile] = useState<Profile | null>(null);
   const me = useGetMe({ query: { queryKey: getGetMeQueryKey(), retry: false } });
-  const hasWalletSession = Boolean(me.data);
-  const canInteract = Boolean(me.data?.profile);
+  const canInteract = Boolean(
+    me.data &&
+    isDiscoverReadyProfile(me.data.profile, me.data.walletAddress),
+  );
   const params: DiscoverProfilesParams = useMemo(()=>({ mode, limit:20, ...(cursor ? { cursor } : {}) }),[cursor,mode]);
   const key = getDiscoverProfilesQueryKey(params);
-  const { data, isLoading, isError, refetch } = useDiscoverProfiles(params, { query: { queryKey:key, retry:false } });
-  const swipe = useSwipeProfile();
-  const qc = useQueryClient();
+  const { data, isLoading, isError, refetch } = useDiscoverProfiles(params, { query: { queryKey:key, retry:false, enabled:canInteract } });
   const profiles = data?.profiles || [];
   useEffect(() => {
     if (canInteract) setWalletDialogOpen(false);
   }, [canInteract]);
-  async function action(profile: Profile, selected: 'pass'|'like'|'super_like') {
+  useEffect(() => {
+    setProfileIndex(0);
+    setToast('');
+  }, [cursor, mode]);
+  function action(selected: 'pass'|'like'|'super_like') {
     if (!canInteract) {
       setWalletDialogOpen(true);
       return;
     }
-    try {
-      const result = await swipe.mutateAsync({ data: { targetUserId: profile.userId, action: selected } });
-      setToast(result.matched ? `It’s mutual. You and @${profile.username} matched.` : selected === 'pass' ? 'Passed. Your next Chog connection awaits.' : 'Like sent. If it’s mutual, you’ll find each other in Matches.');
-      await qc.invalidateQueries({ queryKey:key });
-      if (result.matched) await qc.invalidateQueries({ queryKey:getGetMatchesQueryKey() });
-    } catch { setToast('That action could not be saved. Please try again.'); }
+    const label = selected === 'super_like' ? 'Super Like' : selected === 'like' ? 'Like' : 'Pass';
+    setToast(`${label} selected for this session only. No action was sent or saved.`);
+    setProfileIndex(index => index + 1);
   }
+  const currentCard = profiles[profileIndex];
   return <AppShell><div className="page-enter">
     <PageTitle eyebrow="The good kind of scrolling" title="Find your people." description="Every profile here belongs to an eligible Chog holder. Choose the kind of connection that feels right." />
      <div className="mb-6 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Connection type">{([{value:'discover',label:'All paths'},{value:'date',label:'Dating'},{value:'friends',label:'Friendship'},{value:'network',label:'Networking'},{value:'collab',label:'Collaboration'}] as {value:DiscoverProfilesMode;label:string}[]).map(item=><button key={item.value} onClick={()=>{setMode(item.value);setCursor(undefined);setToast('');}} className={`mode-tab shrink-0 rounded-full px-4 py-2.5 text-xs font-bold transition ${mode===item.value?'active':''}`} aria-pressed={mode===item.value} data-testid={`button-mode-${item.value}`}>{item.label}</button>)}</div>
     {toast && <div className="mx-auto mb-4 max-w-[620px] rounded-2xl border border-[#ded4f5] bg-white px-4 py-3 text-sm text-[#514177]" role="status" data-testid="status-swipe">{toast}<button className="float-right font-bold" onClick={()=>setToast('')} aria-label="Dismiss notification"><X size={16}/></button></div>}
+    {me.isLoading ? <div className="skeleton mx-auto h-[560px] max-w-[620px] rounded-[28px]" /> :
+    me.isError && !isUnauthorized(me.error) ? <QueryState loading={false} error retry={()=>void me.refetch()}><div/></QueryState> :
+    !canInteract ? <EmptyState title={me.data ? 'Finish your profile to discover.' : 'Connect your wallet to discover.'} detail={me.data ? 'Add your photo, age, location, bio, interests, hobbies, and skills to see eligible Chog holders and compatibility scores.' : 'Sign in with the wallet holding your verified Chog to see real, eligible profiles.'} action={me.data ? <Link href="/profile" className="button-primary inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold" data-testid="link-complete-profile">Complete profile <ArrowRight size={15}/></Link> : <button onClick={()=>setWalletDialogOpen(true)} className="button-primary rounded-full px-5 py-3 text-sm font-bold" data-testid="button-connect-to-discover">Connect wallet</button>} /> :
     <QueryState loading={isLoading} error={isError} retry={()=>void refetch()}>
-      {profiles.length ? <><DiscoverCard profile={profiles[0]} onAction={selected => void action(profiles[0],selected)} onOpenProfile={()=>setViewingProfile(profiles[0])} onAuthRequired={()=>setWalletDialogOpen(true)} canInteract={hasWalletSession} pending={swipe.isPending} />
-        <div className="mx-auto mt-5 flex max-w-[620px] items-center justify-between"><p className="text-xs text-[#92869a]">Real holders. Real possibilities.</p>{data?.nextCursor && <button onClick={()=>setCursor(data.nextCursor || undefined)} className="button-soft inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold" data-testid="button-load-more">More people <ArrowRight size={14}/></button>}</div>
-      </> : <EmptyState mark="cm" title="No one new, for now." detail="You’ve reached the end of the eligible Chog holders available to discover. Check back as the community grows." action={<button onClick={()=>void refetch()} className="button-soft rounded-full px-5 py-2.5 text-sm font-bold" data-testid="button-refresh-discovery">Check again</button>} />}
+      {currentCard ? <>
+        <DiscoverCard profile={currentCard} onAction={selected => action(selected)} onOpenProfile={()=>setViewingProfile(currentCard)} onAuthRequired={()=>setWalletDialogOpen(true)} onMediaError={()=>{setToast('A profile or Chog image could not be loaded. This card was skipped for this session.');setProfileIndex(index=>index+1);}} canInteract={canInteract} pending={false} />
+        <div className="mx-auto mt-5 flex max-w-[620px] items-center justify-between"><p className="text-xs text-[#92869a]">Real holders. Real possibilities.</p>{profileIndex >= profiles.length && data?.nextCursor && <button onClick={()=>{setCursor(data.nextCursor || undefined);setProfileIndex(0);}} className="button-soft inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold" data-testid="button-load-more">More people <ArrowRight size={14}/></button>}</div>
+      </> : data?.nextCursor ? <EmptyState mark="cm" title="Looking a little further." detail="No complete profiles in this group yet. Continue to the next set of real Chog holders." action={<button onClick={()=>setCursor(data.nextCursor || undefined)} className="button-soft rounded-full px-5 py-2.5 text-sm font-bold" data-testid="button-load-more">Continue discovery</button>} /> :
+      <EmptyState mark="cm" title="No one new, for now." detail="You’ve reached the end of the complete, eligible Chog holders available to discover. Check back as the community grows." action={<button onClick={()=>{setProfileIndex(0);void refetch();}} className="button-soft rounded-full px-5 py-2.5 text-sm font-bold" data-testid="button-refresh-discovery">Check again</button>} />}
     </QueryState>
+    }
     <ProfileDetailsDialog profile={viewingProfile} open={Boolean(viewingProfile)} onOpenChange={open=>{if(!open)setViewingProfile(null);}}/>
     <WalletConnectionDialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}/>
   </div></AppShell>;
@@ -453,4 +480,38 @@ export function MessagesPage() {
 
 function isUnauthorized(error: unknown): boolean {
   return error instanceof Error && 'status' in error && error.status === 401;
+}
+
+function isDiscoverReadyProfile(
+  profile: Profile | null | undefined,
+  walletAddress: string,
+): boolean {
+  if (!profile) return false;
+  const hasHttpUrl = (value: string | null | undefined) => {
+    if (!value) return false;
+    try {
+      const url = new URL(value);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+  return Boolean(
+    profile.displayName.trim() &&
+    profile.username.trim() &&
+    profile.age !== null &&
+    profile.age >= 18 &&
+    profile.age <= 120 &&
+    profile.bio?.trim() &&
+    profile.location?.trim() &&
+    hasHttpUrl(profile.photoUrl) &&
+    profile.interests.length > 0 &&
+    profile.hobbies.length > 0 &&
+    profile.skills.length > 0 &&
+    profile.lookingFor.length > 0 &&
+    profile.chog.verified &&
+    hasHttpUrl(profile.chog.imageUrl) &&
+    profile.walletAddress.toLowerCase() === walletAddress.toLowerCase() &&
+    profile.chog.ownerWallet.toLowerCase() === walletAddress.toLowerCase()
+  );
 }

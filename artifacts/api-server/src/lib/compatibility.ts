@@ -20,55 +20,36 @@ export function calculateCompatibility(
 ): CompatibilityResult {
   const reasons: string[] = [];
   let score = 0;
-  let availableWeight = 0;
-
   const interestScore = overlap(left.interests, right.interests);
-  if (interestScore !== null) {
-    score += interestScore * 30;
-    availableWeight += 30;
-    reasons.push(...sharedValues(left.interests, right.interests).map((v) => `Shared interest · ${v}`));
-  }
+  score += (interestScore ?? 0) * 30;
+  reasons.push(...sharedValues(left.interests, right.interests).map((v) => `Shared interest · ${v}`));
 
   const goalScore = overlap(left.looking_for, right.looking_for);
-  if (goalScore !== null) {
-    score += goalScore * 25;
-    availableWeight += 25;
-    reasons.push(...sharedValues(left.looking_for, right.looking_for).map((v) => `Both looking for · ${v}`));
-  }
+  score += (goalScore ?? 0) * 25;
+  reasons.push(...sharedValues(left.looking_for, right.looking_for).map((v) => `Both looking for · ${v}`));
 
   const skillScore = overlap(left.skills, right.skills);
-  if (skillScore !== null) {
-    score += skillScore * 15;
-    availableWeight += 15;
-    reasons.push(...sharedValues(left.skills, right.skills).map((v) => `Shared skill · ${v}`));
+  score += (skillScore ?? 0) * 15;
+  reasons.push(...sharedValues(left.skills, right.skills).map((v) => `Shared skill · ${v}`));
+
+  const leftTraits = left.chog?.traits ?? [];
+  const rightTraits = right.chog?.traits ?? [];
+  const traitScore = sharedTraitRatio(leftTraits, rightTraits);
+  score += (traitScore ?? 0) * 20;
+  reasons.push(...sharedTraits(leftTraits, rightTraits));
+
+  if (left.location?.trim() && right.location?.trim() &&
+      normalize(left.location) === normalize(right.location)) {
+    score += 5;
+    reasons.push(`Both list ${left.location.trim()} as their location`);
+  }
+  if (left.timezone?.trim() && right.timezone?.trim() &&
+      normalize(left.timezone) === normalize(right.timezone)) {
+    score += 5;
+    reasons.push(`Both list ${left.timezone.trim()} as their timezone`);
   }
 
-  const traitScore = sharedTraitRatio(left.chog?.traits ?? [], right.chog?.traits ?? []);
-  if (traitScore !== null) {
-    score += traitScore * 20;
-    availableWeight += 20;
-    reasons.push(...sharedTraits(left.chog?.traits ?? [], right.chog?.traits ?? []));
-  }
-
-  if (left.location?.trim() && right.location?.trim()) {
-    availableWeight += 5;
-    if (normalize(left.location) === normalize(right.location)) {
-      score += 5;
-      reasons.push(`Both list ${left.location.trim()} as their location`);
-    }
-  }
-  if (left.timezone?.trim() && right.timezone?.trim()) {
-    availableWeight += 5;
-    if (normalize(left.timezone) === normalize(right.timezone)) {
-      score += 5;
-      reasons.push(`Both list ${left.timezone.trim()} as their timezone`);
-    }
-  }
-
-  const finalScore =
-    availableWeight === 0
-      ? 0
-      : Math.max(0, Math.min(100, Math.round((score / availableWeight) * 100)));
+  const finalScore = Math.max(0, Math.min(100, Math.round(score)));
 
   return { score: finalScore, reasons: [...new Set(reasons)].slice(0, 8) };
 }

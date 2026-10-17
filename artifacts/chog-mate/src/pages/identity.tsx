@@ -445,6 +445,7 @@ type ConnectedProfileFormValues = {
   name: string;
   gender: string;
   age: string;
+  photoUrl: string;
   bio: string;
   location: string;
   timezone: string;
@@ -463,6 +464,7 @@ const emptyConnectedProfile: ConnectedProfileFormValues = {
   name: '',
   gender: '',
   age: '',
+  photoUrl: '',
   bio: '',
   location: '',
   timezone: '',
@@ -486,6 +488,7 @@ function ConnectedProfilePage() {
     name,
     gender,
     age,
+    photoUrl,
     bio,
     location,
     timezone,
@@ -509,6 +512,7 @@ function ConnectedProfilePage() {
         name: profile.name || '',
         gender: profile.gender || '',
         age: profile.age === null ? '' : String(profile.age),
+        photoUrl: profile.photoUrl || '',
         bio: profile.bio || '',
         location: profile.location || '',
         timezone: profile.timezone || '',
@@ -552,10 +556,19 @@ function ConnectedProfilePage() {
       ? me.data?.selectedChogTokenId || profile.chog.tokenId
       : values.selectedChogTokenId;
     if (!tokenIdForSave) { setNotice('Choose a verified Chog to show on your profile.'); return; }
-    const isDating = tags(values.lookingFor).some(value=>/date|romantic/i.test(value));
     const numericAge = values.age.trim() ? Number(values.age) : null;
-    if (isDating && numericAge !== null && (!Number.isInteger(numericAge) || numericAge < 18 || numericAge > 120)) { setNotice('Dating profiles must use an age between 18 and 120.'); return; }
-    const data: ProfileInput = { username:cleanUsername,displayName:values.displayName.trim(),name:values.name.trim()||null,gender:values.gender.trim()||null,age:isDating?numericAge:null,bio:values.bio||undefined,location:values.location||undefined,timezone:values.timezone||undefined,interests:tags(values.interests),hobbies:tags(values.hobbies),skills:tags(values.skills),languages:tags(values.languages),lookingFor:tags(values.lookingFor),selectedChogTokenId:tokenIdForSave,...(values.profileVisible===null?{}:{profileVisible:values.profileVisible}) };
+    if (numericAge !== null && (!Number.isInteger(numericAge) || numericAge < 18 || numericAge > 120)) { setNotice('Use a whole-number age from 18 to 120.'); return; }
+    const photoUrl = values.photoUrl.trim();
+    if (photoUrl) {
+      try {
+        const parsedPhotoUrl = new URL(photoUrl);
+        if (parsedPhotoUrl.protocol !== 'http:' && parsedPhotoUrl.protocol !== 'https:') throw new Error();
+      } catch {
+        setNotice('Use a public profile photo URL that starts with http:// or https://.');
+        return;
+      }
+    }
+    const data: ProfileInput = { username:cleanUsername,displayName:values.displayName.trim(),name:values.name.trim()||null,gender:values.gender.trim()||null,age:numericAge,photoUrl:photoUrl||null,bio:values.bio||undefined,location:values.location||undefined,timezone:values.timezone||undefined,interests:tags(values.interests),hobbies:tags(values.hobbies),skills:tags(values.skills),languages:tags(values.languages),lookingFor:tags(values.lookingFor),selectedChogTokenId:tokenIdForSave,...(values.profileVisible===null?{}:{profileVisible:values.profileVisible}) };
     try {
       const saved = await update.mutateAsync({data});
       reset({
@@ -564,6 +577,7 @@ function ConnectedProfilePage() {
         name: saved.name || '',
         gender: saved.gender || '',
         age: saved.age === null ? '' : String(saved.age),
+        photoUrl: saved.photoUrl || '',
         bio: saved.bio || '',
         location: saved.location || '',
         timezone: saved.timezone || '',
@@ -671,6 +685,7 @@ function ConnectedProfilePage() {
                     <label><span className="profile-field-label">Username <span className="text-[#b45a78]">*</span></span><span className="relative block"><span className="profile-field-prefix">@</span><input className={`field pl-8 ${usernameError?'!border-[#c65861]':''}`} value={username} onChange={e=>{setValue('username',e.target.value.replace(/[^a-zA-Z0-9_]/g,''),{shouldDirty:true});setUsernameError('');}} placeholder="Your public handle" maxLength={24} minLength={2} required aria-invalid={Boolean(usernameError)} aria-describedby={usernameError?'username-help':'username-format'} data-testid="input-username"/></span><span id={usernameError?'username-help':'username-format'} className={`mt-1.5 block text-[10px] ${usernameError?'text-[#aa4848]':'text-[#978692]'}`}>{usernameError || '2–24 letters, numbers, or underscores.'}</span></label>
                     <Field label="Name" value={name} onChange={value=>setValue('name',value,{shouldDirty:true})} placeholder="Name shown on your profile" maxLength={80} testId="input-profile-name"/>
                     <Field label="Gender" value={gender} onChange={value=>setValue('gender',value,{shouldDirty:true})} placeholder="Optional" maxLength={50} testId="input-profile-gender"/>
+                    <label className="sm:col-span-2"><span className="profile-field-label">Profile photo URL</span><input className="field" type="url" value={photoUrl} onChange={e=>setValue('photoUrl',e.target.value,{shouldDirty:true})} placeholder="https://example.com/your-photo.jpg" maxLength={2048} aria-describedby="profile-photo-help" data-testid="input-profile-photo-url"/><span id="profile-photo-help" className="mt-1.5 block text-[10px] leading-4 text-[#978692]">Use a public image URL. A profile photo is required to appear in Discover.</span></label>
                  </div>
                </div>
                <div>
@@ -688,7 +703,7 @@ function ConnectedProfilePage() {
                <div>
                  <div className="mb-4 flex items-center gap-3"><span className="profile-section-index">03</span><div><h3 className="text-sm font-bold text-[#493b4d]">Who would you like to meet?</h3><p className="mt-0.5 text-[11px] text-[#92818f]">Pick the kinds of connections you’re open to.</p></div></div>
                   <TagField label="What are you looking for?" value={lookingFor} onChange={value=>setValue('lookingFor',value,{shouldDirty:true})} placeholder="Dates, friends, collaborators" testId="input-looking-for"/>
-                  {tags(lookingFor).some(value=>/date|romantic/i.test(value)) && <label className="mt-4 block max-w-sm"><span className="profile-field-label">Age <span className="font-normal text-[#958a9b]">(dating only)</span></span><input className="field" type="number" min="18" max="120" step="1" inputMode="numeric" value={age} onChange={event=>setValue('age',event.target.value,{shouldDirty:true})} placeholder="18+" data-testid="input-profile-age"/><span className="mt-1.5 block text-[10px] leading-4 text-[#978692]">Only shown to holders in Dating mode. You must be 18 or older.</span></label>}
+                  <label className="mt-4 block max-w-sm"><span className="profile-field-label">Age <span className="font-normal text-[#958a9b]">(required for Discover)</span></span><input className="field" type="number" min="18" max="120" step="1" inputMode="numeric" value={age} onChange={event=>setValue('age',event.target.value,{shouldDirty:true})} placeholder="18+" data-testid="input-profile-age"/><span className="mt-1.5 block text-[10px] leading-4 text-[#978692]">Use a whole number from 18 to 120.</span></label>
                </div>
              </div>
              {notice && <p className={`mt-6 flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm leading-5 ${notice.startsWith('Your profile is saved')?'border border-[#bed8c0] bg-[#edf6ec] text-[#3d7048]':'border border-[#ebc9c5] bg-[#fff1ed] text-[#914c3c]'}`} role="status" data-testid="status-profile-save"><span className="mt-0.5"><Check size={15}/></span>{notice}</p>}

@@ -447,19 +447,19 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="blind-chog" className="home-blind mx-auto my-5 grid max-w-[1240px] items-center gap-8 overflow-hidden rounded-[30px] border border-[#dacbf3] px-6 py-8 sm:px-10 sm:py-10 md:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
+        <section id="verified-discovery" className="home-visible mx-auto my-5 grid max-w-[1240px] items-center gap-8 overflow-hidden rounded-[30px] border border-[#dacbf3] px-6 py-8 sm:px-10 sm:py-10 md:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
           <div className="relative z-[1] max-w-2xl">
-            <Eyebrow>A different kind of first impression</Eyebrow>
+            <Eyebrow>Meet the person. See the Chog.</Eyebrow>
             <h2 className="display text-[29px] font-extrabold leading-tight text-[#24133f] sm:text-[36px]">
-              Blind Chog.
-              <span className="mt-1 block text-[#7047ff]">Connection before collection.</span>
+              Everything is visible from the first card.
+              <span className="mt-1 block text-[#7047ff]">Real profiles, real Chogs.</span>
             </h2>
             <p className="mt-3 text-sm leading-6 text-[#756883]">
-              We’re shaping a way to meet through what you share, before the
-              artwork takes center stage. Blind Chog isn’t available yet.
+              Discover shows each member’s real photo, profile details, and verified
+              Chog artwork together on every card.
             </p>
           </div>
-          <figure className="home-blind-visual relative z-[1] flex justify-center">
+          <figure className="home-visible-visual relative z-[1] flex justify-center">
             <a
               href={secondaryChogGifPage}
               target="_blank"
