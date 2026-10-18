@@ -163,6 +163,15 @@ export function MyChogPage() {
 
 const tags = (text: string) => text.split(',').map(value=>value.trim()).filter(Boolean);
 const joinTags = (values?: string[]) => values?.join(', ') || '';
+const profileGenderOptions = ['Male', 'Female', 'Gay', 'Trans', 'Alien'] as const;
+const profileLookingForOptions = ['Dating', 'Friendship', 'Networking', 'Collaboration', 'Other'] as const;
+
+function createLookingForValues(selected: string, other: string) {
+  const selectedValues = tags(selected);
+  const values = selectedValues.filter(value=>value!=='Other');
+  if (selectedValues.includes('Other') && other.trim()) values.push(other.trim());
+  return [...new Set(values)];
+}
 
 type ProfilePreviewData = Pick<
   Profile,
@@ -452,6 +461,7 @@ type ConnectedProfileFormValues = {
   skills: string;
   languages: string;
   lookingFor: string;
+  lookingForOther: string;
   selectedChogTokenId: string;
   profileVisible: boolean | null;
 };
@@ -471,6 +481,7 @@ const emptyConnectedProfile: ConnectedProfileFormValues = {
   skills: '',
   languages: '',
   lookingFor: '',
+  lookingForOther: '',
   selectedChogTokenId: '',
   profileVisible: null,
 };
@@ -495,6 +506,7 @@ function ConnectedProfilePage() {
     skills,
     languages,
     lookingFor,
+    lookingForOther,
     selectedChogTokenId,
     profileVisible,
   } = watch();
@@ -519,6 +531,7 @@ function ConnectedProfilePage() {
         skills: joinTags(profile.skills),
         languages: joinTags(profile.languages),
         lookingFor: joinTags(profile.lookingFor),
+        lookingForOther: '',
         selectedChogTokenId: me.data.selectedChogTokenId || profile.chog.tokenId,
         profileVisible: me.data.profileVisible ?? true,
       });
@@ -549,12 +562,18 @@ function ConnectedProfilePage() {
     }
     setUsernameError('');
     if (!values.displayName.trim()) { setNotice('Add a display name to continue.'); return; }
-    if (!values.lookingFor.trim()) { setNotice('Add at least one connection type to continue.'); return; }
+    const selectedLookingFor = tags(values.lookingFor);
+    if (!profile && selectedLookingFor.includes('Other') && !values.lookingForOther.trim()) {
+      setNotice('Add your own option for “Other” to continue.');
+      return;
+    }
+    const lookingForValues = profile ? selectedLookingFor : createLookingForValues(values.lookingFor, values.lookingForOther);
+    if (!lookingForValues.length) { setNotice('Choose at least one option for what you’re looking for.'); return; }
     const tokenIdForSave = profile
       ? me.data?.selectedChogTokenId || profile.chog.tokenId
       : values.selectedChogTokenId;
     if (!tokenIdForSave) { setNotice('Choose a verified Chog to show on your profile.'); return; }
-    const numericAge = values.age.trim() ? Number(values.age) : null;
+    const numericAge = profile && values.age.trim() ? Number(values.age) : null;
     if (numericAge !== null && (!Number.isInteger(numericAge) || numericAge < 18 || numericAge > 120)) { setNotice('Use a whole-number age from 18 to 120.'); return; }
     const photoUrl = values.photoUrl.trim();
     if (photoUrl) {
@@ -566,7 +585,7 @@ function ConnectedProfilePage() {
         return;
       }
     }
-    const data: ProfileInput = { username:cleanUsername,displayName:values.displayName.trim(),name:values.name.trim()||null,gender:values.gender.trim()||null,age:numericAge,photoUrl:photoUrl||null,bio:values.bio||undefined,location:values.location||undefined,timezone:values.timezone||undefined,interests:tags(values.interests),hobbies:tags(values.hobbies),skills:tags(values.skills),languages:tags(values.languages),lookingFor:tags(values.lookingFor),selectedChogTokenId:tokenIdForSave,...(values.profileVisible===null?{}:{profileVisible:values.profileVisible}) };
+    const data: ProfileInput = { username:cleanUsername,displayName:values.displayName.trim(),name:profile?values.name.trim()||null:null,gender:values.gender.trim()||null,age:numericAge,photoUrl:photoUrl||null,bio:values.bio||undefined,location:profile?values.location||undefined:undefined,timezone:profile?values.timezone||undefined:undefined,interests:tags(values.interests),hobbies:tags(values.hobbies),skills:profile?tags(values.skills):[],languages:tags(values.languages),lookingFor:lookingForValues,selectedChogTokenId:tokenIdForSave,...(values.profileVisible===null?{}:{profileVisible:values.profileVisible}) };
     try {
       const saved = await update.mutateAsync({data});
       reset({
@@ -584,6 +603,7 @@ function ConnectedProfilePage() {
         skills: joinTags(saved.skills),
         languages: joinTags(saved.languages),
         lookingFor: joinTags(saved.lookingFor),
+        lookingForOther: '',
         selectedChogTokenId: saved.chog.tokenId,
         profileVisible: values.profileVisible ?? true,
       });
@@ -617,12 +637,20 @@ function ConnectedProfilePage() {
       setNotice('Couldn’t switch your active Chog. Ownership may have changed; refresh and try again.');
     }
   }
+  function toggleLookingForOption(option: typeof profileLookingForOptions[number]) {
+    const selected = tags(lookingFor);
+    const next = selected.includes(option)
+      ? selected.filter(value=>value!==option)
+      : [...selected, option];
+    setValue('lookingFor', next.join(', '), {shouldDirty:true});
+    if (option==='Other' && selected.includes(option)) setValue('lookingForOther', '', {shouldDirty:true});
+  }
   const selectedChog = me.data?.chogs.find(chog=>chog.verified && chog.tokenId===selectedChogTokenId) || profile?.chog;
   const draftPreview: ProfilePreviewData | null = selectedChog ? {
     username, displayName, name:name||null, gender:gender||null, age:age.trim()?Number(age):null,
     bio:bio||null, location:location||null, timezone:timezone||null,
     interests:tags(interests), hobbies:tags(hobbies), skills:tags(skills), languages:tags(languages),
-    lookingFor:tags(lookingFor), chog:selectedChog,
+    lookingFor:profile?tags(lookingFor):createLookingForValues(lookingFor,lookingForOther), chog:selectedChog,
   } : null;
   return <AppShell displayName={profile?.displayName}><div className="page-enter">
     <style>{`
@@ -691,7 +719,39 @@ function ConnectedProfilePage() {
                <div><p className="text-[9px] font-bold uppercase tracking-[.18em] text-[#a35b79]">{profile?'Profile details':'First, the basics'}</p><h2 className="display mt-1 text-[28px] text-[#38253a]">{profile?'Refine your introduction.':'Start with what feels like you.'}</h2></div>
                <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f7e9ed] text-[#ac4c70] sm:grid"><Sparkles size={18}/></span>
              </div>
-             <div className="space-y-7">
+              {!profile ? <div className="space-y-7">
+                <div>
+                  <div className="mb-4 flex items-center gap-3"><span className="profile-section-index">01</span><div><h3 className="text-sm font-bold text-[#493b4d]">The essentials</h3><p className="mt-0.5 text-[11px] text-[#92818f]">Choose how you’ll appear to the community.</p></div></div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label><span className="profile-field-label">Name <span className="text-[#b45a78]">*</span></span><input className="field" value={displayName} onChange={event=>setValue('displayName',event.target.value,{shouldDirty:true})} placeholder="How people will meet you" maxLength={48} required aria-label="Name" data-testid="input-display-name"/></label>
+                    <label><span className="profile-field-label">Username <span className="text-[#b45a78]">*</span></span><span className="relative block"><span className="profile-field-prefix">@</span><input className={`field pl-8 ${usernameError?'!border-[#c65861]':''}`} value={username} onChange={event=>{setValue('username',event.target.value.replace(/[^a-zA-Z0-9_]/g,''),{shouldDirty:true});setUsernameError('');}} placeholder="Your public handle" maxLength={24} minLength={2} required aria-invalid={Boolean(usernameError)} aria-describedby={usernameError?'username-help':'username-format'} data-testid="input-username"/></span><span id={usernameError?'username-help':'username-format'} className={`mt-1.5 block text-[10px] ${usernameError?'text-[#aa4848]':'text-[#978692]'}`}>{usernameError || '2–24 letters, numbers, or underscores.'}</span></label>
+                    <fieldset className="sm:col-span-2">
+                      <legend className="profile-field-label">Gender</legend>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="Gender">
+                        {profileGenderOptions.map(option=><button key={option} type="button" aria-pressed={gender===option} onClick={()=>setValue('gender',gender===option?'':option,{shouldDirty:true})} className={`profile-visibility-choice min-h-10 px-4 ${gender===option?'is-selected':''}`} data-testid={`button-gender-${option.toLowerCase()}`}>{option}</button>)}
+                      </div>
+                    </fieldset>
+                    <label className="sm:col-span-2"><span className="profile-field-label">Profile photo URL</span><input className="field" type="url" value={photoUrl} onChange={event=>setValue('photoUrl',event.target.value,{shouldDirty:true})} placeholder="https://example.com/your-photo.jpg" maxLength={2048} aria-describedby="profile-photo-help" data-testid="input-profile-photo-url"/><span id="profile-photo-help" className="mt-1.5 block text-[10px] leading-4 text-[#978692]">Use a public image URL. A profile photo is required to appear in Discover.</span></label>
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-4 flex items-center gap-3"><span className="profile-section-index">02</span><div><h3 className="text-sm font-bold text-[#493b4d]">A little about you</h3><p className="mt-0.5 text-[11px] text-[#92818f]">Share what you enjoy and what you’d like to find.</p></div></div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="sm:col-span-2"><span className="profile-field-label">Introduction</span><textarea value={bio} onChange={event=>setValue('bio',event.target.value,{shouldDirty:true})} maxLength={500} rows={4} className="field resize-y" placeholder="What are you curious about lately? What do you love talking about?" data-testid="input-bio"/><span className="mt-1.5 block text-right text-[10px] text-[#978692]">{bio.length}/500</span></label>
+                    <TagField label="Interests" value={interests} onChange={value=>setValue('interests',value,{shouldDirty:true})} placeholder="Art, climbing, long reads" testId="input-interests"/>
+                    <TagField label="Hobbies" value={hobbies} onChange={value=>setValue('hobbies',value,{shouldDirty:true})} placeholder="Hiking, cooking, photography" testId="input-hobbies"/>
+                    <TagField label="Languages" value={languages} onChange={value=>setValue('languages',value,{shouldDirty:true})} placeholder="English, Hindi, Spanish" testId="input-languages"/>
+                    <fieldset className="sm:col-span-2">
+                      <legend className="profile-field-label">What are you looking for? <span className="text-[#b45a78]">*</span></legend>
+                      <p className="mb-3 text-[10px] leading-4 text-[#978692]">Choose one or more.</p>
+                      <div className="flex flex-wrap gap-2">
+                        {profileLookingForOptions.map(option=><button key={option} type="button" aria-pressed={tags(lookingFor).includes(option)} onClick={()=>toggleLookingForOption(option)} className={`profile-visibility-choice min-h-10 px-4 ${tags(lookingFor).includes(option)?'is-selected':''}`} data-testid={`button-looking-for-${option.toLowerCase()}`}>{option}</button>)}
+                      </div>
+                      {tags(lookingFor).includes('Other') && <label className="mt-3 block"><span className="profile-field-label">Your option <span className="text-[#b45a78]">*</span></span><input className="field" value={lookingForOther} onChange={event=>setValue('lookingForOther',event.target.value,{shouldDirty:true})} placeholder="Type your own option" maxLength={50} required data-testid="input-looking-for-other"/></label>}
+                    </fieldset>
+                  </div>
+                </div>
+              </div> : <div className="space-y-7">
                <div>
                  <div className="mb-4 flex items-center gap-3"><span className="profile-section-index">01</span><div><h3 className="text-sm font-bold text-[#493b4d]">The name they’ll remember</h3><p className="mt-0.5 text-[11px] text-[#92818f]">A name and handle for your community profile.</p></div></div>
                  <div className="grid gap-4 sm:grid-cols-2">
@@ -719,7 +779,7 @@ function ConnectedProfilePage() {
                   <TagField label="What are you looking for?" value={lookingFor} onChange={value=>setValue('lookingFor',value,{shouldDirty:true})} placeholder="Dates, friends, collaborators" testId="input-looking-for"/>
                   <label className="mt-4 block max-w-sm"><span className="profile-field-label">Age <span className="font-normal text-[#958a9b]">(required for Discover)</span></span><input className="field" type="number" min="18" max="120" step="1" inputMode="numeric" value={age} onChange={event=>setValue('age',event.target.value,{shouldDirty:true})} placeholder="18+" data-testid="input-profile-age"/><span className="mt-1.5 block text-[10px] leading-4 text-[#978692]">Use a whole number from 18 to 120.</span></label>
                </div>
-             </div>
+              </div>}
              {notice && <p className={`mt-6 flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm leading-5 ${notice.startsWith('Your profile is saved')?'border border-[#bed8c0] bg-[#edf6ec] text-[#3d7048]':'border border-[#ebc9c5] bg-[#fff1ed] text-[#914c3c]'}`} role="status" data-testid="status-profile-save"><span className="mt-0.5"><Check size={15}/></span>{notice}</p>}
              <div className="mt-7 flex flex-col-reverse justify-between gap-4 border-t border-[#eadde2] pt-5 sm:flex-row sm:items-center">
                <p className="max-w-xs text-[10px] leading-5 text-[#958692]">Your wallet, verified ownership, and token ID are protected and can’t be edited here.</p>
@@ -734,14 +794,14 @@ function ConnectedProfilePage() {
               <p className="mt-2 text-[11px] leading-5 text-[#897985]">{profile?'Choose which verified Chog represents you.':'Select the verified NFT you want on your profile.'}</p>
               <div className="mt-4 grid grid-cols-2 gap-2.5">{me.data.chogs.filter(chog=>chog.verified).map(chog=><button type="button" onClick={()=>setValue('selectedChogTokenId',chog.tokenId,{shouldDirty:true})} key={chog.tokenId} aria-pressed={selectedChogTokenId===chog.tokenId} className={`profile-chog-choice overflow-hidden rounded-[17px] text-left ${selectedChogTokenId===chog.tokenId?'is-selected':''}`} data-testid={`button-select-chog-${chog.tokenId}`}><div className="relative aspect-square"><ChogArtwork chog={chog}/>{me.data.selectedChogTokenId===chog.tokenId && <span className="absolute right-1.5 top-1.5 rounded-full bg-[#35243a]/90 px-2 py-1 text-[8px] font-bold uppercase tracking-wide text-white">Active</span>}{selectedChogTokenId===chog.tokenId && <span className="absolute bottom-1.5 left-1.5 grid h-5 w-5 place-items-center rounded-full bg-[#fffaf7] text-[#a64b70]"><Check size={12}/></span>}</div><div className="bg-[#fffaf8] px-2.5 py-2"><span className="block text-[11px] font-bold text-[#4b3c4c]">Chog #{chog.tokenId}</span>{chog.tier && <span className="mt-0.5 block text-[9px] text-[#9b8797]">{chog.tier}</span>}</div></button>)}</div>
               {profile ? <div className="mt-4 border-t border-[#eadde2] pt-4"><p className="text-[10px] leading-5 text-[#897985]">Switching changes only your active Chog identity. Your profile details stay exactly as they are.</p><button type="button" onClick={()=>void switchActiveChog()} disabled={selectActiveChog.isPending || !selectedChogTokenId || selectedChogTokenId===me.data.selectedChogTokenId} className="button-primary mt-3 w-full rounded-full px-4 py-3 text-xs font-bold disabled:opacity-50" data-testid="button-set-active-chog">{selectActiveChog.isPending?'Revalidating ownership…':selectedChogTokenId===me.data.selectedChogTokenId?'Active Chog':'Make active Chog'}</button></div> : <p className="mt-3 text-[10px] leading-5 text-[#897985]">Your selected Chog becomes your active profile identity when you save.</p>}
-              <div className="mt-5 border-t border-[#eadde2] pt-4">
+              {profile && <div className="mt-5 border-t border-[#eadde2] pt-4">
                 <p className="mb-3 flex items-center gap-2 text-xs font-bold text-[#493b4d]"><Eye size={15} className="text-[#a34d70]"/>Discovery visibility</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={()=>setValue('profileVisible',true,{shouldDirty:true})} aria-pressed={profileVisible===true} className={`profile-visibility-choice ${profileVisible===true?'is-selected':''}`} data-testid="button-profile-show"><Eye size={14}/>Show profile</button>
                   <button type="button" onClick={()=>setValue('profileVisible',false,{shouldDirty:true})} aria-pressed={profileVisible===false} className={`profile-visibility-choice ${profileVisible===false?'is-selected':''}`} data-testid="button-profile-hide"><EyeOff size={14}/>Hide from discovery</button>
                 </div>
                 <p className="mt-2.5 text-[10px] leading-5 text-[#978692]">{profileVisible===null?'Choose how you want to appear; current visibility is not returned by the profile service.':'Saved together with your profile when you choose Save profile.'} <Link href="/settings" className="font-bold text-[#a34d70]" data-testid="link-profile-visibility-settings">Manage in Settings</Link></p>
-              </div>
+              </div>}
               <div className="mt-4 flex items-start gap-2 rounded-xl bg-[#f8f0ee] px-3 py-2.5 text-[9px] leading-4 text-[#806f7c]"><LockKeyhole size={13} className="mt-0.5 shrink-0 text-[#9b5670]"/>Only your profile details are shared. Wallet credentials are never displayed.</div>
            </aside>
           </form>
