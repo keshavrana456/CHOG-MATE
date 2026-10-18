@@ -269,6 +269,26 @@ export interface ProfileInput {
   profileVisible?: boolean;
 }
 
+export interface DiscoverVisibilityInput {
+  visible: boolean;
+}
+
+export interface DiscoverVisibility {
+  visible: boolean;
+}
+
+export interface BlockedUser {
+  userId: string;
+  /** @nullable */
+  walletAddress: string | null;
+  /** @nullable */
+  username: string | null;
+  /** @nullable */
+  displayName: string | null;
+  /** @nullable */
+  photoUrl: string | null;
+}
+
 export interface ChogSelectionInput {
   /**
      * @minLength 1

@@ -422,6 +422,18 @@ export const UpdateMeProfileResponse = zod.object({
 
 
 /**
+ * @summary Update whether the signed-in user's profile appears in Discover
+ */
+export const UpdateDiscoverVisibilityBody = zod.object({
+  "visible": zod.boolean()
+})
+
+export const UpdateDiscoverVisibilityResponse = zod.object({
+  "visible": zod.boolean()
+})
+
+
+/**
  * @summary Set the active Chog without changing profile details
  */
 export const selectActiveChogBodyTokenIdMax = 78;
@@ -816,6 +828,19 @@ export const RequestMessageAttachmentUploadUrlResponse = zod.object({
 
 
 /**
+ * @summary List users blocked by the signed-in account
+ */
+export const GetBlockedUsersResponseItem = zod.object({
+  "userId": zod.string().uuid(),
+  "walletAddress": zod.string().nullable(),
+  "username": zod.string().nullable(),
+  "displayName": zod.string().nullable(),
+  "photoUrl": zod.string().url().nullable()
+})
+export const GetBlockedUsersResponse = zod.array(GetBlockedUsersResponseItem)
+
+
+/**
  * @summary Block a profile
  */
 export const BlockProfileBody = zod.object({
@@ -823,6 +848,16 @@ export const BlockProfileBody = zod.object({
 })
 
 export const BlockProfileResponse = zod.void()
+
+
+/**
+ * @summary Unblock a user
+ */
+export const UnblockUserParams = zod.object({
+  "blockedUserId": zod.coerce.string().uuid()
+})
+
+export const UnblockUserResponse = zod.void()
 
 
 /**

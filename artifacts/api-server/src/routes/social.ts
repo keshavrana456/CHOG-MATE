@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import {
   BlockProfileBody,
+  GetBlockedUsersResponse,
   GetLikeInboxResponse,
   GetMatchesResponse,
   GetMessagesParams,
@@ -15,6 +16,7 @@ import {
   SendMessageResponse,
   SwipeProfileBody,
   SwipeProfileResponse,
+  UnblockUserParams,
   UnmatchProfileParams,
 } from "@workspace/api-zod";
 import { getAddress } from "viem";
@@ -649,6 +651,76 @@ router.post("/blocks", async (req, res): Promise<void> => {
         .eq("status", "active"),
     ]);
     if (a.error || b.error) req.log.warn("A match could not be closed after a block");
+    res.sendStatus(204);
+  } catch (error) {
+    sendSocialError(req, res, error);
+  }
+});
+
+router.get("/blocks", async (req, res): Promise<void> => {
+  const session = requireWalletSession(req, res);
+  if (!session) return;
+
+  try {
+    const admin = getSupabaseAdmin();
+    const { data: blocks, error: blocksError } = await admin
+      .from("blocks")
+      .select("blocked_user_id,created_at")
+      .eq("blocker_id", session.userId)
+      .order("created_at", { ascending: false });
+    if (blocksError) throw new SocialDataError("Blocked users could not be loaded.", blocksError);
+
+    const blockedUserIds = (blocks ?? []).map((row) => row.blocked_user_id);
+    if (blockedUserIds.length === 0) {
+      res.json(GetBlockedUsersResponse.parse([]));
+      return;
+    }
+
+    const [usersResult, profilesResult] = await Promise.all([
+      admin.from("users").select("id,wallet_address").in("id", blockedUserIds),
+      admin
+        .from("profiles")
+        .select("user_id,username,display_name,photo_url")
+        .in("user_id", blockedUserIds),
+    ]);
+    if (usersResult.error || profilesResult.error) {
+      throw new SocialDataError("Blocked users could not be loaded.", usersResult.error ?? profilesResult.error);
+    }
+    const usersById = new Map((usersResult.data ?? []).map((user) => [user.id, user]));
+    const profilesById = new Map((profilesResult.data ?? []).map((profile) => [profile.user_id, profile]));
+    const response = blockedUserIds.map((userId) => {
+      const user = usersById.get(userId);
+      const profile = profilesById.get(userId);
+      return {
+        userId,
+        walletAddress: user?.wallet_address ?? null,
+        username: profile?.username ?? null,
+        displayName: profile?.display_name ?? null,
+        photoUrl: profile?.photo_url ?? null,
+      };
+    });
+    res.json(GetBlockedUsersResponse.parse(response));
+  } catch (error) {
+    sendSocialError(req, res, error);
+  }
+});
+
+router.delete("/blocks/:blockedUserId", async (req, res): Promise<void> => {
+  const session = requireWalletSession(req, res);
+  if (!session) return;
+  const parsed = UnblockUserParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: "That blocked user could not be found." });
+    return;
+  }
+
+  try {
+    const { error } = await getSupabaseAdmin()
+      .from("blocks")
+      .delete()
+      .eq("blocker_id", session.userId)
+      .eq("blocked_user_id", parsed.data.blockedUserId);
+    if (error) throw new SocialDataError("The user could not be unblocked.", error);
     res.sendStatus(204);
   } catch (error) {
     sendSocialError(req, res, error);

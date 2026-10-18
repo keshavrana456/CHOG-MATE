@@ -1,13 +1,14 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Activity, BadgeCheck, Check, ChevronDown, Eye, EyeOff, Globe2, Heart, LockKeyhole, LogOut, MapPin, RefreshCw, Save, ShieldCheck, Sparkles, Wallet } from 'lucide-react';
+import { Activity, BadgeCheck, Check, ChevronDown, Copy, Eye, EyeOff, Globe2, Heart, LockKeyhole, LogOut, MapPin, RefreshCw, Save, ShieldCheck, Sparkles, Wallet } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { formatUnits, isAddress, type Address } from 'viem';
 import { useConnection, useDisconnect, useReadContract } from 'wagmi';
 import {
-  getGetAuthSessionQueryKey, getGetMeQueryKey, getGetNftOwnershipQueryKey,
-  useGetMe, useGetNftOwnership, useLogoutWallet, useSelectActiveChog, useUpdateMeProfile,
+  getGetAuthSessionQueryKey, getGetBlockedUsersQueryKey, getGetMeQueryKey, getGetNftOwnershipQueryKey,
+  useGetBlockedUsers, useGetMe, useGetNftOwnership, useLogoutWallet, useSelectActiveChog,
+  useUnblockUser, useUpdateDiscoverVisibility, useUpdateMeProfile,
 } from '@workspace/api-client-react';
 import type { Chog, Profile, ProfileInput } from '@workspace/api-client-react';
 import { AppShell, ChogArtwork, EmptyState, Eyebrow, PageTitle, QueryState } from '@/components/shared';
@@ -982,45 +983,52 @@ export function SettingsPage() {
   const profile=me.data?.profile;
   const [visible,setVisible]=useState<boolean|null>(null);
   const [message,setMessage]=useState('');
-  const [scanInput,setScanInput]=useState('');
-  const [scanAddress,setScanAddress]=useState('');
-  const [scanNonce,setScanNonce]=useState(0);
-  const [scanError,setScanError]=useState('');
-  const walletScan=useGetNftOwnership(scanAddress,{query:{enabled:!!scanAddress,queryKey:[...getGetNftOwnershipQueryKey(scanAddress),scanNonce],refetchOnWindowFocus:false,retry:1}});
-  const update=useUpdateMeProfile();
+  const blockedUsers=useGetBlockedUsers({query:{queryKey:getGetBlockedUsersQueryKey(),refetchOnWindowFocus:true}});
+  const updateVisibility=useUpdateDiscoverVisibility();
+  const unblock=useUnblockUser();
   const logout=useLogoutWallet();
   const walletConnection=useConnection();
   const walletDisconnect=useDisconnect();
   const qc=useQueryClient();
   const [,navigate]=useLocation();
-  function scanWallet(event:FormEvent) {
-    event.preventDefault();
-    setScanError('');
-    const address=scanInput.trim();
-    if(!isAddress(address,{strict:false})) {
-      setScanError('Enter a valid EVM wallet address and try again.');
-      setScanAddress('');
-      return;
-    }
-    setScanAddress(address);
-    setScanNonce(value=>value+1);
-  }
   useEffect(() => {
-    if (visible === null && me.data?.profileVisible !== null && me.data?.profileVisible !== undefined) {
-      setVisible(me.data.profileVisible);
-    }
-  }, [me.data?.profileVisible, visible]);
-  async function saveVisibility() {
-    const currentMe=me.data;
-    if (!profile || !currentMe || !(currentMe.selectedChogTokenId || profile.chog.tokenId)) { setMessage('Create your profile and choose a Chog before changing discovery visibility.'); return; }
-    if (visible===null) { setMessage('Choose whether your profile should appear in discovery.'); return; }
+    if (me.data) setVisible(me.data.profileVisible);
+  }, [me.data?.profileVisible]);
+  const walletAddress=me.data?.walletAddress;
+  const shortWalletAddress=walletAddress ? `${walletAddress.slice(0,6)}…${walletAddress.slice(-4)}` : '';
+  async function copyWalletAddress() {
+    if (!walletAddress) return;
     try {
-      await update.mutateAsync({data:{username:profile.username,displayName:profile.displayName,name:profile.name,gender:profile.gender,age:profile.age,bio:profile.bio||undefined,location:profile.location||undefined,timezone:profile.timezone||undefined,interests:profile.interests,hobbies:profile.hobbies,skills:profile.skills,languages:profile.languages,lookingFor:profile.lookingFor,selectedChogTokenId:currentMe.selectedChogTokenId || profile.chog.tokenId,profileVisible:visible}});
-      await qc.invalidateQueries({queryKey:getGetMeQueryKey()}); setMessage('Discovery visibility updated.');
-    } catch {setMessage('We couldn’t update visibility. Please try again.');}
+      await navigator.clipboard.writeText(walletAddress);
+      setMessage('Wallet address copied.');
+    } catch {
+      setMessage('Could not copy the wallet address. Please copy it manually.');
+    }
+  }
+  async function changeVisibility(nextVisible:boolean) {
+    if (!me.data?.hasProfile || visible===null || nextVisible===visible) return;
+    const previousVisible=visible;
+    setVisible(nextVisible);
+    setMessage('');
+    try {
+      await updateVisibility.mutateAsync({data:{visible:nextVisible}});
+      await qc.invalidateQueries({queryKey:getGetMeQueryKey()});
+      setMessage(`Discover visibility is now ${nextVisible?'on':'off'}.`);
+    } catch {
+      setVisible(previousVisible);
+      setMessage('We couldn’t update Discover visibility. Please try again.');
+    }
+  }
+  async function unblockUser(userId:string) {
+    try {
+      await unblock.mutateAsync({blockedUserId:userId});
+      await qc.invalidateQueries({queryKey:getGetBlockedUsersQueryKey()});
+      setMessage('User unblocked.');
+    } catch {
+      setMessage('We couldn’t unblock this user. Please try again.');
+    }
   }
   async function signOut() {
-    if (!window.confirm('Disconnect this wallet from CHOG MATE?')) return;
     try {
       await logout.mutateAsync();
     } catch {
@@ -1028,46 +1036,67 @@ export function SettingsPage() {
       return;
     }
 
-    qc.setQueryData(getGetAuthSessionQueryKey(), { authenticated: false });
     await qc.cancelQueries();
-    qc.clear();
-    navigate('/');
-
-    if (supabase) void supabase.auth.signOut();
+    const cleanupTasks:Promise<unknown>[]=[];
+    if (supabase) cleanupTasks.push(supabase.auth.signOut());
     if (walletConnection.connector) {
-      void walletDisconnect.disconnectAsync({ connector: walletConnection.connector });
+      cleanupTasks.push(walletDisconnect.disconnectAsync({ connector: walletConnection.connector }));
     }
+    await Promise.allSettled(cleanupTasks);
+    qc.clear();
+    qc.setQueryData(getGetAuthSessionQueryKey(), { authenticated: false });
+    navigate('/');
   }
   return <AppShell displayName={profile?.displayName}><div className="page-enter">
-    <PageTitle eyebrow="Your space, your rules" title="Settings." description="Keep your account comfortable, visible on your terms, and safe." />
-    <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
-      <aside className="flex gap-2 overflow-x-auto lg:block lg:space-y-2">{[['account','Account'],['discovery','Discovery'],['privacy','Privacy'],['safety','Safety']].map(([id,title])=><a key={id} href={`#${id}`} className="settings-tab shrink-0 rounded-full px-4 py-2.5 text-xs font-bold lg:block lg:rounded-2xl" data-testid={`link-settings-${id}`}>{title}</a>)}</aside>
-      <div className="space-y-5">
-        <section id="account" className="surface scroll-mt-24 rounded-[26px] p-6"><Eyebrow>Account</Eyebrow><h2 className="display text-2xl font-extrabold text-[#24133f]">Wallet connection</h2>
-          {me.isLoading ? <div className="skeleton mt-4 h-16 rounded-2xl"/> : me.data ? <div className="mt-4 flex flex-col justify-between gap-4 rounded-2xl bg-[#faf6ef] p-4 sm:flex-row sm:items-center"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[#eee8ff] text-[#7047ff]"><Wallet size={18}/></div><div><p className="text-xs font-bold text-[#594d64]">Connected wallet</p><p className="mt-1 break-all text-xs text-[#887c90]" data-testid="text-settings-wallet">{me.data.walletAddress}</p></div></div><button onClick={()=>void signOut()} disabled={logout.isPending||walletDisconnect.isPending} className="inline-flex items-center justify-center gap-2 rounded-full border border-[#e9d7d1] px-4 py-2.5 text-xs font-bold text-[#99534a] hover:bg-white disabled:opacity-50" data-testid="button-sign-out"><LogOut size={14}/>{logout.isPending||walletDisconnect.isPending?'Disconnecting…':'Disconnect wallet'}</button></div> : <p className="mt-3 text-sm text-[#887c90]">No connected wallet session. Connect from the home page to continue.</p>}
-        </section>
-        <section id="discovery" className="surface scroll-mt-24 rounded-[26px] p-6"><Eyebrow>Discovery & privacy</Eyebrow><h2 className="display text-2xl font-extrabold text-[#24133f]">You choose who sees you.</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#82778c]">When hidden, your profile won’t appear in discovery. You can still see your existing matches and conversations.</p>
-          <p className="mt-5 text-xs font-bold text-[#5c5067]">Choose profile visibility</p><div className="mt-2 grid max-w-md grid-cols-2 gap-2"><button onClick={()=>setVisible(true)} aria-pressed={visible===true} className={`rounded-xl border px-3 py-3 text-xs font-bold ${visible===true?'border-[#8a63ff] bg-[#f2ecff] text-[#6246b0]':'border-[#e9e0d3] bg-white text-[#7c7185]'}`} data-testid="button-settings-show">Show me</button><button onClick={()=>setVisible(false)} aria-pressed={visible===false} className={`rounded-xl border px-3 py-3 text-xs font-bold ${visible===false?'border-[#8a63ff] bg-[#f2ecff] text-[#6246b0]':'border-[#e9e0d3] bg-white text-[#7c7185]'}`} data-testid="button-settings-hide">Hide me</button></div><p className="mt-2 text-[11px] leading-5 text-[#998ea0]">{visible===null?'Your current preference could not be loaded. Choose an option to update it.':`Your profile is currently ${visible?'visible':'hidden'} in discovery.`}</p>
-          <button onClick={()=>void saveVisibility()} disabled={update.isPending||visible===null} className="button-primary mt-4 rounded-full px-5 py-2.5 text-sm font-bold disabled:opacity-50" data-testid="button-save-visibility">{update.isPending?'Saving…':'Save visibility'}</button>
-        </section>
-        <section id="wallet-scanner" className="surface scroll-mt-24 rounded-[26px] p-6" aria-labelledby="wallet-scanner-title">
-          <Eyebrow>On-chain verification</Eyebrow>
-          <h2 id="wallet-scanner-title" className="display text-2xl font-extrabold text-[#24133f]">Chog wallet scanner</h2>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-[#82778c]">Check any EVM address against the Chog Genesis NFT contract on Monad Mainnet. The scan reads current ownership from the chain; it does not check the $CHOG token.</p>
-          <form onSubmit={scanWallet} className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <label className="flex-1"><span className="mb-2 block text-xs font-bold text-[#5c5067]">EVM wallet address</span><input className="field" value={scanInput} onChange={event=>setScanInput(event.target.value)} placeholder="0x..." autoComplete="off" spellCheck={false} aria-label="EVM wallet address" data-testid="input-wallet-scanner"/></label>
-            <button type="submit" disabled={walletScan.isFetching} className="button-primary mt-auto inline-flex min-h-[46px] items-center justify-center gap-2 rounded-full px-5 text-xs font-bold disabled:opacity-55" data-testid="button-scan-wallet"><Activity size={15}/>{walletScan.isFetching?'Scanning wallet…':'Scan wallet'}</button>
-          </form>
-          <p className="mt-2 text-[10px] leading-5 text-[#9a8ea1]">Network: Monad Mainnet · Chain ID 143 · Chog Genesis contract 0xc96d31f8626c6d03fae5dcd3d61e3fb9f4a73763</p>
-          {scanError && <p role="alert" className="mt-4 rounded-2xl border border-[#edc8bc] bg-[#fff2ec] px-4 py-3 text-sm text-[#914c3c]" data-testid="status-wallet-scan-validation">{scanError}</p>}
-          {scanAddress && walletScan.isFetching && <p role="status" className="mt-4 flex items-center gap-2 rounded-2xl bg-[#f2ecff] px-4 py-3 text-sm font-semibold text-[#6246b0]" data-testid="status-wallet-scanning"><Activity size={15} className="animate-pulse"/>Scanning wallet on Monad…</p>}
-          {scanAddress && walletScan.isError && !walletScan.isFetching && <p role="alert" className="mt-4 rounded-2xl border border-[#edc8bc] bg-[#fff2ec] px-4 py-3 text-sm leading-5 text-[#914c3c]" data-testid="status-wallet-scan-error">We couldn’t verify this wallet right now. A network or indexer error is not treated as zero Chogs; try scanning again.</p>}
-          {scanAddress && walletScan.data && !walletScan.isFetching && walletScan.data.verified && <div className="mt-4 rounded-2xl border border-[#cde4c5] bg-[#f3faf0] p-4" role="status" data-testid="status-chog-found"><p className="flex items-center gap-2 text-sm font-extrabold text-[#447a43]"><BadgeCheck size={17}/>CHOG FOUND</p><p className="mt-1 break-all text-xs leading-5 text-[#687a65]">{walletScan.data.chogs.length} verified Chog{walletScan.data.chogs.length===1?'':'s'} held by {walletScan.data.walletAddress}.</p><div className="mt-3 flex flex-wrap gap-2">{walletScan.data.chogs.map(chog=><span key={chog.tokenId} className="rounded-full border border-[#d8e9d1] bg-white/80 px-3 py-1.5 text-[11px] font-bold text-[#4f7650]">Chog #{chog.tokenId}</span>)}</div></div>}
-          {scanAddress && walletScan.data && !walletScan.isFetching && !walletScan.data.verified && <div className="mt-4 rounded-2xl border border-[#e5d8c8] bg-[#fffaf1] p-4" role="status" data-testid="status-no-chog"><p className="text-sm font-extrabold text-[#815f43]">NO CHOG FOUND</p><p className="mt-1 text-xs leading-5 text-[#8b7868]">This address currently has no verified Chog Genesis NFTs. CHOG MATE is only for verified Chog holders.</p></div>}
-        </section>
-        <section id="safety" className="surface scroll-mt-24 rounded-[26px] p-6"><Eyebrow>Safety</Eyebrow><h2 className="display text-2xl font-extrabold text-[#24133f]">A little care goes a long way.</h2><div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-[#faf6ef] p-4"><ShieldCheck className="text-[#7047ff]" size={19}/><h3 className="mt-3 text-sm font-bold text-[#51445f]">Verified holders only</h3><p className="mt-1 text-xs leading-5 text-[#8b8091]">Discovery is limited to people with verified Chog Genesis ownership.</p></div><div className="rounded-2xl bg-[#faf6ef] p-4"><LockKeyhole className="text-[#7047ff]" size={19}/><h3 className="mt-3 text-sm font-bold text-[#51445f]">Block and report</h3><p className="mt-1 text-xs leading-5 text-[#8b8091]">Use the safety menu on a discover profile to report or block someone.</p></div></div><div className="mt-4 rounded-2xl border border-dashed border-[#ded4c7] px-4 py-3 text-xs leading-5 text-[#8b8091]" data-testid="status-block-list-setup">Blocked-account management and export controls aren’t available in this version. Your report and block actions are still available from profiles.</div></section>
-        {message && <p role="status" className="rounded-2xl bg-[#f2ecff] px-4 py-3 text-sm text-[#594285]" data-testid="status-settings">{message}</p>}
-      </div>
+    <PageTitle eyebrow="Account preferences" title="Settings." description="Manage your wallet connection, Discover visibility, and blocked users." />
+    <div className="space-y-5">
+      <section className="surface rounded-[26px] p-6" aria-labelledby="settings-wallet-title">
+        <Eyebrow>Connected Wallet</Eyebrow>
+        <h2 id="settings-wallet-title" className="display text-2xl font-extrabold text-[#24133f]">Connected Wallet</h2>
+        {me.isLoading ? <div className="skeleton mt-4 h-14 rounded-2xl" role="status" aria-label="Loading connected wallet"/> :
+          walletAddress ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#faf6ef] p-4">
+            <div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eee8ff] text-[#7047ff]"><Wallet size={18}/></span><p className="truncate text-sm font-semibold text-[#594d64]" title={walletAddress} data-testid="text-settings-wallet" aria-label={`Connected wallet ${walletAddress}`}>{shortWalletAddress}</p></div>
+            <button type="button" onClick={()=>void copyWalletAddress()} className="inline-flex items-center gap-2 rounded-full border border-[#e9e0d3] bg-white px-4 py-2.5 text-xs font-bold text-[#594d64] hover:bg-[#f8f4ed]" data-testid="button-copy-wallet"><Copy size={14}/>Copy</button>
+          </div> : <p className="mt-3 text-sm text-[#887c90]" role="status">No connected wallet session.</p>}
+      </section>
+
+      <section className="surface rounded-[26px] p-6" aria-labelledby="settings-visibility-title">
+        <Eyebrow>Discover Visibility</Eyebrow>
+        <h2 id="settings-visibility-title" className="display text-2xl font-extrabold text-[#24133f]">Show me in Discover</h2>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-[#faf6ef] p-4">
+          <div><p className="text-sm font-semibold text-[#594d64]">Show me in Discover</p><p className="mt-1 text-xs text-[#887c90]" data-testid="text-settings-visibility">{me.isLoading?'Loading saved preference…':!me.data?.hasProfile?'Create a profile to change this setting.':visible===null?'Saved preference unavailable.':`Currently ${visible?'on':'off'}.`}</p></div>
+          <button type="button" role="switch" aria-checked={visible===true} aria-label="Show me in Discover" onClick={()=>void changeVisibility(visible!==true)} disabled={!me.data?.hasProfile||visible===null||updateVisibility.isPending} className={`relative h-8 w-14 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${visible?'bg-[#8a63ff]':'bg-[#cfc5d2]'}`} data-testid="toggle-discover-visibility">
+            <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${visible?'translate-x-7':'translate-x-1'}`}/>
+          </button>
+        </div>
+        {updateVisibility.isPending && <p className="mt-3 text-xs text-[#887c90]" role="status">Saving Discover visibility…</p>}
+      </section>
+
+      <section className="surface rounded-[26px] p-6" aria-labelledby="settings-blocked-title">
+        <Eyebrow>Blocked Users</Eyebrow>
+        <h2 id="settings-blocked-title" className="display text-2xl font-extrabold text-[#24133f]">Blocked Users</h2>
+        {blockedUsers.isLoading ? <div className="skeleton mt-4 h-14 rounded-2xl" role="status" aria-label="Loading blocked users"/> :
+          blockedUsers.isError ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#fff2ec] p-4"><p className="text-sm text-[#914c3c]" role="alert">Blocked users couldn’t be loaded.</p><button type="button" onClick={()=>void blockedUsers.refetch()} className="rounded-full border border-[#e9d7d1] px-4 py-2 text-xs font-bold text-[#99534a]" data-testid="button-retry-blocked-users">Try again</button></div> :
+          !blockedUsers.data?.length ? <p className="mt-4 rounded-2xl bg-[#faf6ef] px-4 py-4 text-sm text-[#887c90]" data-testid="text-no-blocked-users">You haven’t blocked anyone.</p> :
+          <ul className="mt-4 divide-y divide-[#eee5e5]">
+            {blockedUsers.data.map(user=>{
+              const name=user.displayName||user.username||(user.walletAddress?`${user.walletAddress.slice(0,6)}…${user.walletAddress.slice(-4)}`:'CHOG MATE user');
+              const isUnblocking=unblock.isPending&&unblock.variables?.blockedUserId===user.userId;
+              return <li key={user.userId} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0" data-testid={`row-blocked-user-${user.userId}`}>
+                <div className="min-w-0"><p className="truncate text-sm font-semibold text-[#594d64]" data-testid={`text-blocked-user-${user.userId}`}>{name}</p><p className="truncate text-xs text-[#887c90]">{user.username?`@${user.username}`:user.walletAddress??'Blocked account'}</p></div>
+                <button type="button" onClick={()=>void unblockUser(user.userId)} disabled={unblock.isPending} className="rounded-full border border-[#e9d7d1] px-4 py-2 text-xs font-bold text-[#99534a] hover:bg-[#fff2ec] disabled:opacity-50" data-testid={`button-unblock-${user.userId}`}>{isUnblocking?'Unblocking…':'Unblock'}</button>
+              </li>;
+            })}
+          </ul>}
+      </section>
+
+      <section className="surface rounded-[26px] p-6" aria-labelledby="settings-logout-title">
+        <Eyebrow>Session</Eyebrow>
+        <h2 id="settings-logout-title" className="display text-2xl font-extrabold text-[#24133f]">Logout / Disconnect Wallet</h2>
+        <p className="mt-2 text-sm leading-6 text-[#82778c]">End your current CHOG MATE session and disconnect the wallet from this app where supported.</p>
+        <button type="button" onClick={()=>void signOut()} disabled={logout.isPending||walletDisconnect.isPending} className="mt-4 inline-flex items-center justify-center gap-2 rounded-full border border-[#e9d7d1] px-5 py-2.5 text-xs font-bold text-[#99534a] hover:bg-white disabled:opacity-50" data-testid="button-sign-out"><LogOut size={14}/>{logout.isPending||walletDisconnect.isPending?'Logging out…':'Logout / Disconnect Wallet'}</button>
+      </section>
+      {message && <p role="status" className="rounded-2xl bg-[#f2ecff] px-4 py-3 text-sm text-[#594285]" data-testid="status-settings">{message}</p>}
     </div>
   </div></AppShell>;
 }

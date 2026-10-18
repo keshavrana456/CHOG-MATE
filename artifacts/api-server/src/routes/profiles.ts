@@ -4,6 +4,8 @@ import {
   DiscoverProfilesResponse,
   GetMeResponse,
   SelectActiveChogBody,
+  UpdateDiscoverVisibilityBody,
+  UpdateDiscoverVisibilityResponse,
   UpdateMeProfileBody,
   UpdateMeProfileResponse,
 } from "@workspace/api-zod";
@@ -72,6 +74,39 @@ router.get("/me", async (req, res): Promise<void> => {
         profile,
       }),
     );
+  } catch (error) {
+    sendProfileError(req, res, error);
+  }
+});
+
+router.put("/me/discover-visibility", async (req, res): Promise<void> => {
+  const session = requireWalletSession(req, res);
+  if (!session) return;
+  const parsed = UpdateDiscoverVisibilityBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Choose whether your profile should appear in Discover." });
+    return;
+  }
+
+  try {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("profiles")
+      .update({
+        profile_visible: parsed.data.visible,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", session.userId)
+      .select("profile_visible")
+      .maybeSingle();
+    if (error) {
+      throw new SocialDataError("Discover visibility could not be updated.", error);
+    }
+    if (!data) {
+      res.status(409).json({ error: "Create your profile before changing Discover visibility." });
+      return;
+    }
+    res.json(UpdateDiscoverVisibilityResponse.parse({ visible: data.profile_visible }));
   } catch (error) {
     sendProfileError(req, res, error);
   }

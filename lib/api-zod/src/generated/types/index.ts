@@ -9,6 +9,7 @@
 export * from './apiErrorResponse';
 export * from './authChallenge';
 export * from './authSessionStatus';
+export * from './blockedUser';
 export * from './blockInput';
 export * from './chog';
 export * from './chogSelectionInput';
@@ -17,6 +18,8 @@ export * from './currentProfile';
 export * from './currentProfileIdentityMode';
 export * from './discoverProfilesMode';
 export * from './discoverProfilesParams';
+export * from './discoverVisibility';
+export * from './discoverVisibilityInput';
 export * from './discoveryPage';
 export * from './getLiveSalesParams';
 export * from './healthStatus';

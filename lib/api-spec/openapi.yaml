@@ -257,6 +257,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiErrorResponse"
+  /me/discover-visibility:
+    put:
+      operationId: updateDiscoverVisibility
+      tags: [profiles]
+      summary: Update whether the signed-in user's profile appears in Discover
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscoverVisibilityInput"
+      responses:
+        "200":
+          description: Discover visibility updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoverVisibility"
+        "409":
+          description: Create a profile before changing Discover visibility
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "503":
+          description: Profile or database service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
   /me/chog:
     patch:
       operationId: selectActiveChog
@@ -430,6 +460,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageAttachmentUpload"
   /blocks:
+    get:
+      operationId: getBlockedUsers
+      tags: [safety]
+      summary: List users blocked by the signed-in account
+      responses:
+        "200":
+          description: Blocked users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlockedUser"
     post:
       operationId: blockProfile
       tags: [safety]
@@ -443,6 +486,21 @@ paths:
       responses:
         "204":
           description: Profile blocked
+  /blocks/{blockedUserId}:
+    delete:
+      operationId: unblockUser
+      tags: [safety]
+      summary: Unblock a user
+      parameters:
+        - name: blockedUserId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: User unblocked
   /reports:
     post:
       operationId: reportProfile
@@ -677,6 +735,25 @@ components:
           items: { type: string, maxLength: 50 }
         selectedChogTokenId: { type: string }
         profileVisible: { type: boolean, default: true }
+    DiscoverVisibilityInput:
+      type: object
+      required: [visible]
+      properties:
+        visible: { type: boolean }
+    DiscoverVisibility:
+      type: object
+      required: [visible]
+      properties:
+        visible: { type: boolean }
+    BlockedUser:
+      type: object
+      required: [userId, walletAddress, username, displayName, photoUrl]
+      properties:
+        userId: { type: string, format: uuid }
+        walletAddress: { type: ["string", "null"] }
+        username: { type: ["string", "null"] }
+        displayName: { type: ["string", "null"] }
+        photoUrl: { type: ["string", "null"], format: uri }
     ChogSelectionInput:
       type: object
       required: [tokenId]

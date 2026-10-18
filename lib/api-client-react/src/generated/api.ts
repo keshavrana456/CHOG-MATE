@@ -24,11 +24,14 @@ import type {
   AuthChallenge,
   AuthSessionStatus,
   BlockInput,
+  BlockedUser,
   Chog,
   ChogSelectionInput,
   CollectionStats,
   CurrentProfile,
   DiscoverProfilesParams,
+  DiscoverVisibility,
+  DiscoverVisibilityInput,
   DiscoveryPage,
   GetLiveSalesParams,
   HealthStatus,
@@ -1051,6 +1054,94 @@ export const useUpdateMeProfile = <TError = ErrorType<ApiErrorResponse>,
       return useMutation(getUpdateMeProfileMutationOptions(options));
     }
 
+export const getUpdateDiscoverVisibilityUrl = () => {
+
+
+
+
+  return `/api/me/discover-visibility`
+}
+
+/**
+ * @summary Update whether the signed-in user's profile appears in Discover
+ */
+export const updateDiscoverVisibility = async (discoverVisibilityInput: DiscoverVisibilityInput, options?: Parameters<typeof customFetch>[1]): Promise<DiscoverVisibility> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<DiscoverVisibility>(getUpdateDiscoverVisibilityUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(discoverVisibilityInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateDiscoverVisibilityMutationKey = () => ['updateDiscoverVisibility'] as const;
+
+export const getUpdateDiscoverVisibilityMutationOptions = <TError = ErrorType<ApiErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDiscoverVisibility>>, TError,UpdateDiscoverVisibilityMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateDiscoverVisibility>>, TError,UpdateDiscoverVisibilityMutationVariables, TContext> => {
+
+const mutationKey = getUpdateDiscoverVisibilityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateDiscoverVisibility>>, UpdateDiscoverVisibilityMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateDiscoverVisibility(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateDiscoverVisibilityMutationResult = NonNullable<Awaited<ReturnType<typeof updateDiscoverVisibility>>>
+    export type UpdateDiscoverVisibilityMutationBody = BodyType<DiscoverVisibilityInput>
+    export type UpdateDiscoverVisibilityMutationError = ErrorType<ApiErrorResponse>
+    export type UpdateDiscoverVisibilityMutationVariables = {data: BodyType<DiscoverVisibilityInput>}
+
+    /**
+ * @summary Update whether the signed-in user's profile appears in Discover
+ */
+export const useUpdateDiscoverVisibility = <TError = ErrorType<ApiErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDiscoverVisibility>>, TError,UpdateDiscoverVisibilityMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateDiscoverVisibility>>,
+        TError,
+        UpdateDiscoverVisibilityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateDiscoverVisibilityMutationOptions(options));
+    }
+
 export const getSelectActiveChogUrl = () => {
 
 
@@ -1721,6 +1812,83 @@ export const useRequestMessageAttachmentUploadUrl = <TError = ErrorType<unknown>
       return useMutation(getRequestMessageAttachmentUploadUrlMutationOptions(options));
     }
 
+export const getGetBlockedUsersUrl = () => {
+
+
+
+
+  return `/api/blocks`
+}
+
+/**
+ * @summary List users blocked by the signed-in account
+ */
+export const getBlockedUsers = async ( options?: Parameters<typeof customFetch>[1]): Promise<BlockedUser[]> => {
+
+  return customFetch<BlockedUser[]>(getGetBlockedUsersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBlockedUsersQueryKey = () => {
+    return [
+    `/api/blocks`
+    ] as const;
+    }
+
+
+export const getGetBlockedUsersQueryOptions = <TData = Awaited<ReturnType<typeof getBlockedUsers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBlockedUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBlockedUsersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBlockedUsers>>> = ({ signal }) => getBlockedUsers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBlockedUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBlockedUsersQueryResult = NonNullable<Awaited<ReturnType<typeof getBlockedUsers>>>
+export type GetBlockedUsersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List users blocked by the signed-in account
+ */
+
+export function useGetBlockedUsers<TData = Awaited<ReturnType<typeof getBlockedUsers>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBlockedUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBlockedUsersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getBlockProfileUrl = () => {
 
 
@@ -1807,6 +1975,80 @@ export const useBlockProfile = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getBlockProfileMutationOptions(options));
+    }
+
+export const getUnblockUserUrl = (blockedUserId: string,) => {
+
+
+
+
+  return `/api/blocks/${blockedUserId}`
+}
+
+/**
+ * @summary Unblock a user
+ */
+export const unblockUser = async (blockedUserId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getUnblockUserUrl(blockedUserId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnblockUserMutationKey = () => ['unblockUser'] as const;
+
+export const getUnblockUserMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unblockUser>>, TError,UnblockUserMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unblockUser>>, TError,UnblockUserMutationVariables, TContext> => {
+
+const mutationKey = getUnblockUserMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unblockUser>>, UnblockUserMutationVariables> = (props) => {
+          const {blockedUserId} = props ?? {};
+
+          return  unblockUser(blockedUserId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnblockUserMutationResult = NonNullable<Awaited<ReturnType<typeof unblockUser>>>
+
+    export type UnblockUserMutationError = ErrorType<unknown>
+    export type UnblockUserMutationVariables = {blockedUserId: string}
+
+    /**
+ * @summary Unblock a user
+ */
+export const useUnblockUser = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unblockUser>>, TError,UnblockUserMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unblockUser>>,
+        TError,
+        UnblockUserMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUnblockUserMutationOptions(options));
     }
 
 export const getReportProfileUrl = () => {
