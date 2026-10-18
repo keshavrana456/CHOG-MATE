@@ -16,7 +16,7 @@ export function Brand({ inverse = false }: { inverse?: boolean }) {
       height={48}
       className="brand-mark"
     />
-    <span className={`display text-[22px] font-extrabold tracking-[-.07em] ${inverse ? 'text-[#fff4de]' : 'text-[#24133f]'}`}>CHOG MATE</span>
+    <span className={`display brand-wordmark text-[22px] font-extrabold tracking-[-.07em] ${inverse ? 'brand-wordmark-inverse' : ''}`}>CHOG MATE</span>
   </Link>;
 }
 
@@ -69,7 +69,7 @@ export function AppShell({ children, displayName }: { children: ReactNode; displ
   return <div className="app-shell grain relative">
     <header className={`topbar relative z-20 sticky top-0 ${headerHidden ? 'is-hidden' : ''}`}>
       <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-5 md:px-9">
-        <Brand />
+        <Brand inverse />
         <nav className="nav-glass hidden items-center gap-0.5 rounded-full p-1 md:flex" aria-label="Main navigation">
           {(authenticated ? links : publicLinks).map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} data-testid={`link-nav-${label.toLowerCase().replace(' ', '-')}`} className={`nav-link flex items-center gap-1.5 rounded-full px-2 py-2 text-[11px] font-semibold lg:gap-2 lg:px-2.5 lg:text-xs xl:px-3 xl:text-[13px] ${path === href ? 'active' : ''}`}><Icon size={14} strokeWidth={2.2} />{label}</Link>)}
         </nav>
