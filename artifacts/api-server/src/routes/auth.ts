@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import {
+  AuthSessionStatus,
   CreateAddressSessionBody,
   CreateAddressSessionResponse,
   CreateAuthChallengeBody,
@@ -13,6 +14,7 @@ import {
   clearWalletSessionCookie,
   createWalletAuthSession,
   makeWalletChallenge,
+  readWalletSession,
   setWalletSessionCookie,
   verifyWalletChallenge,
 } from "../lib/wallet-auth";
@@ -20,6 +22,11 @@ import { getSupabaseAdmin } from "../lib/supabase";
 import { getSafeBackendErrorFields, toApiFailure } from "../lib/backend-errors";
 
 const router: IRouter = Router();
+
+router.get("/auth/session", (req, res): void => {
+  const session = readWalletSession(req);
+  res.json(AuthSessionStatus.parse({ authenticated: Boolean(session) }));
+});
 
 router.post("/auth/challenge", async (req, res): Promise<void> => {
   const parsed = CreateAuthChallengeBody.safeParse(req.body);

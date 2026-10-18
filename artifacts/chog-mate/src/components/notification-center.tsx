@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCheck, Heart, MessageCircle, Sparkles, Video, X } from "lucide-react";
 import { Link } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { createNotificationChannelLifecycle } from "@/lib/notification-channel-lifecycle";
 
 type NotificationRow = {
   id: string;
@@ -25,10 +26,8 @@ export function NotificationCenter() {
       setItems([]);
       return;
     }
-    let channel: ReturnType<typeof client.channel> | null = null;
     let disposed = false;
     let activeUserId: string | null = null;
-    let retryTimer: number | null = null;
 
     const loadNotifications = async (nextUserId: string) => {
       if (disposed) return;
@@ -42,107 +41,66 @@ export function NotificationCenter() {
       if (!error) setItems((data ?? []) as NotificationRow[]);
     };
 
-    const subscribe = (nextUserId: string) => {
-      if (disposed || activeUserId !== nextUserId || channel) return;
-      const nextChannel = client
-        .channel(`user-notifications:${nextUserId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${nextUserId}`,
-          },
-          (payload) => {
-            if (payload.eventType === "INSERT") {
-              const inserted = payload.new as NotificationRow;
-              setItems((current) =>
-                [inserted, ...current.filter((item) => item.id !== inserted.id)].slice(0, 30),
-              );
-            } else if (payload.eventType === "UPDATE") {
-              const updated = payload.new as NotificationRow;
-              setItems((current) =>
-                current.map((item) => item.id === updated.id ? updated : item),
-              );
-              } else if (payload.eventType === "DELETE") {
-                const removed = payload.old as Pick<NotificationRow, "id">;
-                setItems((current) => current.filter((item) => item.id !== removed.id));
-            }
-          },
-        )
-        .subscribe((status) => {
-          if (
-            disposed ||
-            activeUserId !== nextUserId ||
-            channel !== nextChannel
-          ) return;
-          if (status === "SUBSCRIBED") {
-            if (retryTimer !== null) {
-              window.clearTimeout(retryTimer);
-              retryTimer = null;
-            }
-            void loadNotifications(nextUserId);
-          } else if (
-            status === "CHANNEL_ERROR" ||
-            status === "TIMED_OUT" ||
-            status === "CLOSED"
-          ) {
-            channel = null;
-            void client.removeChannel(nextChannel);
-            if (retryTimer === null) {
-              retryTimer = window.setTimeout(() => {
-                retryTimer = null;
-                subscribe(nextUserId);
-              }, 3000);
-            }
-          }
-        });
-    };
-
-    const stopSubscription = () => {
-      if (retryTimer !== null) {
-        window.clearTimeout(retryTimer);
-        retryTimer = null;
-      }
-      if (channel) {
-        const current = channel;
-        channel = null;
-        void client.removeChannel(current);
-      }
-    };
-
-    const changeUser = async (nextUserId: string | null) => {
-      if (disposed) return;
-      if (nextUserId === activeUserId) {
-        if (nextUserId) {
-          subscribe(nextUserId);
-          await loadNotifications(nextUserId);
+    const lifecycle = createNotificationChannelLifecycle(client, {
+      onUserChange: (nextUserId) => {
+        activeUserId = nextUserId;
+        if (disposed) return;
+        setUserId(nextUserId);
+        setItems([]);
+        if (nextUserId) void loadNotifications(nextUserId);
+      },
+      onChange: (nextUserId, payload) => {
+        if (disposed || activeUserId !== nextUserId) return;
+        const change = payload as {
+          eventType: string;
+          new: NotificationRow;
+          old: Pick<NotificationRow, "id">;
+        };
+        if (change.eventType === "INSERT") {
+          const inserted = change.new;
+          setItems((current) =>
+            [inserted, ...current.filter((item) => item.id !== inserted.id)].slice(0, 30),
+          );
+        } else if (change.eventType === "UPDATE") {
+          const updated = change.new;
+          setItems((current) =>
+            current.map((item) => item.id === updated.id ? updated : item),
+          );
+        } else if (change.eventType === "DELETE") {
+          const removed = change.old;
+          setItems((current) => current.filter((item) => item.id !== removed.id));
         }
-        return;
-      }
-
-      stopSubscription();
-      activeUserId = nextUserId;
-      setUserId(nextUserId);
-      setItems([]);
-      if (!nextUserId) return;
-
-      subscribe(nextUserId);
-      await loadNotifications(nextUserId);
-    };
-
-    void client.auth.getSession().then(({ data }) => {
-      void changeUser(data.session?.user.id ?? null);
+      },
+      onSubscribed: (nextUserId) => {
+        void loadNotifications(nextUserId);
+      },
+      onError: (error) => {
+        console.error("Notification Realtime lifecycle failed", error);
+      },
     });
+
+    let authEventObserved = false;
     const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
-      window.setTimeout(() => void changeUser(session?.user.id ?? null), 0);
+      authEventObserved = true;
+      const nextUserId = session?.user.id ?? null;
+      window.setTimeout(() => {
+        if (!disposed) void lifecycle.changeUser(nextUserId);
+      }, 0);
+    });
+    void client.auth.getSession().then(({ data }) => {
+      if (!disposed && !authEventObserved) {
+        void lifecycle.changeUser(data.session?.user.id ?? null);
+      }
+    }).catch((error: unknown) => {
+      if (!disposed) console.error("Unable to read the notification session", error);
     });
 
     return () => {
       disposed = true;
       authListener.subscription.unsubscribe();
-      stopSubscription();
+      void lifecycle.dispose().catch((error: unknown) => {
+        console.error("Unable to remove the notification channel", error);
+      });
     };
   }, []);
 

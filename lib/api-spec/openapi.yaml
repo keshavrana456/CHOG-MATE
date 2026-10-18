@@ -52,6 +52,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthChallenge"
+  /auth/session:
+    get:
+      operationId: getAuthSession
+      tags: [auth]
+      summary: Check whether the current CHOG MATE session is valid
+      responses:
+        "200":
+          description: Current session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionStatus"
   /auth/verify:
     post:
       operationId: verifyWallet
@@ -490,6 +502,11 @@ components:
         nonce: { type: string }
         message: { type: string }
         expiresAt: { type: string, format: date-time }
+    AuthSessionStatus:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated: { type: boolean }
     WalletSignatureInput:
       type: object
       required: [walletAddress, nonce, signature]
