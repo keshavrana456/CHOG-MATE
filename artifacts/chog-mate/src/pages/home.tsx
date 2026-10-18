@@ -107,7 +107,7 @@ export default function HomePage() {
             >
               MEET YOUR
               <br />
-              <span>CHOG MATE</span>.
+              <span>CHOG MATE</span>
             </h1>
             <div className="mt-7 flex items-center gap-3">
               <span className="h-px w-10 bg-[#a78aef]" />
