@@ -117,7 +117,7 @@ export function QueryState({ loading, error, retry, children }: { loading: boole
 }
 
 export function ChogArtwork({ chog, className = '' }: { chog?: Chog | null; className?: string }) {
-  if (chog?.imageUrl) return <img src={chog.imageUrl} alt={chog.name || `Verified Chog ${chog.tokenId}`} className={`h-full w-full object-cover ${className}`} />;
+  if (chog?.imageUrl) return <img src={chog.imageUrl} alt={chog.name || `Verified Chog ${chog.tokenId}`} className={`h-full w-full object-contain ${className}`} />;
   return <div className={`flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_35%,#e8ddff,#dcd4ff_52%,#c6b3fa)] text-[#3e286a] ${className}`}><div className="grid h-20 w-20 place-items-center rounded-[28px] border border-white/50 bg-white/35 shadow-[0_12px_30px_#50329322] backdrop-blur"><span className="display text-3xl font-extrabold tracking-[-.1em]">cm</span></div><span className="mt-3 text-[10px] font-bold uppercase tracking-[.17em]">{chog ? `Chog #${chog.tokenId}` : 'CHOG MATE'}</span></div>;
 }
 

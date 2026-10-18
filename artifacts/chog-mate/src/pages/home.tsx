@@ -227,12 +227,11 @@ export default function HomePage() {
               label="Total volume"
               value={
                 stats.data?.totalVolume
-                  ? `${formatAmount(stats.data.totalVolume.amount)} ${stats.data.totalVolume.currency}`
+                  ? `${formatCompactAmount(stats.data.totalVolume.amount)} ${stats.data.totalVolume.currency}`
                   : 'Unavailable'
               }
               loading={stats.isLoading}
               error={stats.isError}
-              detail="ETH volume converted to MON using a live exchange rate."
             />
             <StatCard
               label="Total holders"
@@ -371,7 +370,7 @@ export default function HomePage() {
                           alt={`Chog #${sale.tokenId}`}
                           loading="lazy"
                           decoding="async"
-                          className="home-sale-image transition duration-500"
+                          className="home-sale-image"
                         />
                       ) : (
                         <div className="grid h-full place-items-center text-[#8e8097]">
@@ -559,6 +558,17 @@ function formatAmount(amount: string) {
   if (value !== 0 && Math.abs(value) < 0.0001) return value.toExponential(2);
   return new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 4,
+  }).format(value);
+}
+
+function formatCompactAmount(amount: string) {
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return amount;
+  if (value !== 0 && Math.abs(value) < 0.0001) return value.toExponential(2);
+  return new Intl.NumberFormat(undefined, {
+    notation: 'compact',
+    compactDisplay: 'short',
+    maximumFractionDigits: 2,
   }).format(value);
 }
 

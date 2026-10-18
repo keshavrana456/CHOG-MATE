@@ -238,7 +238,7 @@ function CollectionImage({ item }: { item: ChogCollectionItem }) {
       alt={item.name ?? `Chog Genesis #${item.tokenId}`}
       loading="lazy"
       decoding="async"
-      className="aspect-square w-full object-cover transition duration-500 group-hover:scale-[1.025]"
+      className="aspect-square w-full object-contain"
       onError={() => setSourceIndex((index) => index + 1)}
     />
   );

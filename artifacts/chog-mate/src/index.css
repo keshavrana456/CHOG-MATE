@@ -198,8 +198,7 @@
 .home-sales-track { display:flex;width:max-content;min-width:100%;gap:16px;padding:4px 2px 14px; }
 .home-sale-card { flex:0 0 min(78vw,300px);width:min(78vw,300px);scroll-snap-align:start;text-decoration:none; }
 .home-sale-art { display:grid;place-items:center;background:linear-gradient(145deg,#f8eceb,#f6e7eb); }
-.home-sale-image { width:82%;height:82%;object-fit:contain;transition:transform .5s; }
-.home-sale-card:hover .home-sale-image { transform:scale(1.04); }
+.home-sale-image { width:100%;height:100%;object-fit:contain; }
 .home-stat { min-height:138px; }
 .home-data-state { min-height:180px; }
 select option { background:#fffaf6;color:#442d35; }
