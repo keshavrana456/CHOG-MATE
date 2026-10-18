@@ -10,8 +10,8 @@ import { WalletConnectionDialog } from '@/components/wallet-connection-dialog';
 export function Brand({ inverse = false }: { inverse?: boolean }) {
   return <Link href="/" className="inline-flex items-center gap-3" data-testid="link-brand">
     <img
-      src="https://media1.tenor.com/m/I4kaCEPTjMUAAAAd/chog-monad.gif"
-      alt="Chog waving hello"
+      src="https://media1.tenor.com/m/O3waRaZ2i4AAAAAC/chog-monad.gif"
+      alt="Chog dancing"
       width={48}
       height={48}
       className="brand-mark"

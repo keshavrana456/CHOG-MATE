@@ -122,7 +122,7 @@
 .brand-wordmark-inverse { color:#fff4de; }
 .topbar { background:linear-gradient(112deg,#21132f 0%,#332048 56%,#4a2965 100%); border-bottom:1px solid rgba(206,171,237,.3); box-shadow:0 8px 28px rgba(45,23,61,.22); backdrop-filter:blur(22px); transition:transform .38s cubic-bezier(.2,.8,.25,1),opacity .24s ease,filter .24s ease; will-change:transform,opacity; }
 .topbar.is-hidden { transform:translate3d(0,-112%,0) scale(.985); opacity:0; filter:blur(4px); pointer-events:none; }
-.brand-mark { display:block;width:48px;height:48px;flex:none;object-fit:contain;border-radius:50%;background:#f8e7eb;box-shadow:0 5px 18px rgba(144,54,85,.14); }
+.brand-mark { display:block;width:48px;height:48px;flex:none;object-fit:contain;background:transparent; }
 .nav-glass { background:linear-gradient(112deg,#21132f 0%,#332048 56%,#4a2965 100%); border:1px solid rgba(206,171,237,.3); box-shadow:inset 0 1px rgba(255,255,255,.12),0 9px 24px rgba(45,23,61,.22); }
 .nav-link { color:#f7effa; border:1px solid transparent; font-family:var(--app-font-mono); font-size:10px; letter-spacing:.025em; transition:color .2s,background .2s,border-color .2s,transform .2s; }
 .nav-link:hover,.nav-link.active { color:#fff; background:linear-gradient(120deg,rgba(145,93,190,.68),rgba(188,61,125,.72)); border-color:rgba(243,190,225,.25); box-shadow:inset 0 1px rgba(255,255,255,.2); }
@@ -176,7 +176,7 @@
 .home-hero { position:relative; }
 .home-main-heading { display:table;max-width:100%;padding:0;border-radius:0;background:none;color:#3c242f!important;box-shadow:none;font-size:clamp(3.5rem,7.6vw,7rem);line-height:.84;letter-spacing:-.045em;text-shadow:0 2px 0 rgba(255,255,255,.55); }
 .home-main-heading span { color:#d43a7b!important;text-shadow:0 8px 24px rgba(212,58,123,.14); }
-.home-hero-gif { display:block;width:100%;height:100%;border-radius:50%;object-fit:contain;object-position:center;filter:drop-shadow(0 14px 32px rgba(94,39,57,.16)); }
+.home-hero-gif { display:block;width:100%;height:100%;object-fit:contain;object-position:center;filter:drop-shadow(0 14px 32px rgba(94,39,57,.16)); }
 .home-text-link { color:#a83d65;transition:color .2s,transform .2s; }
 .home-text-link:hover { color:#762442;transform:translateX(2px); }
 .home-step { transition:transform .22s,box-shadow .22s; }
