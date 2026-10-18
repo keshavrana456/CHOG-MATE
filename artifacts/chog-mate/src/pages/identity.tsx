@@ -1,16 +1,18 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Activity, BadgeCheck, Check, ChevronDown, ExternalLink, Eye, EyeOff, Globe2, Heart, LockKeyhole, LogOut, MapPin, Save, ShieldCheck, Sparkles, Wallet } from 'lucide-react';
+import { Activity, BadgeCheck, Check, ChevronDown, Eye, EyeOff, Globe2, Heart, LockKeyhole, LogOut, MapPin, RefreshCw, Save, ShieldCheck, Sparkles, Wallet } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
-import { isAddress } from 'viem';
-import { useConnection, useDisconnect } from 'wagmi';
+import { formatUnits, isAddress, type Address } from 'viem';
+import { useConnection, useDisconnect, useReadContract } from 'wagmi';
 import {
-  getGetAuthSessionQueryKey, getGetChogQueryKey, getGetMeQueryKey, getGetNftOwnershipQueryKey,
-  useGetChog, useGetMe, useGetNftOwnership, useLogoutWallet, useSelectActiveChog, useUpdateMeProfile,
+  getGetAuthSessionQueryKey, getGetMeQueryKey, getGetNftOwnershipQueryKey,
+  useGetMe, useGetNftOwnership, useLogoutWallet, useSelectActiveChog, useUpdateMeProfile,
 } from '@workspace/api-client-react';
 import type { Chog, Profile, ProfileInput } from '@workspace/api-client-react';
 import { AppShell, ChogArtwork, EmptyState, Eyebrow, PageTitle, QueryState } from '@/components/shared';
+import { appConfig } from '@/lib/config';
+import { monadNetwork } from '@/lib/appkit';
 import { Form } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -23,6 +25,69 @@ import {
 } from '@/lib/manual-test-profile';
 import { supabase } from '@/lib/supabase';
 
+const chogTokenBalanceAbi = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{name:'account',type:'address'}],
+    outputs: [{name:'',type:'uint256'}],
+  },
+  {
+    type: 'function',
+    name: 'decimals',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{name:'',type:'uint8'}],
+  },
+] as const;
+
+function MyChogTokenBalance({walletAddress}:{walletAddress:string}) {
+  const address = isAddress(walletAddress) ? walletAddress as Address : undefined;
+  const decimals = useReadContract({
+    address: appConfig.chogTokenAddress,
+    abi: chogTokenBalanceAbi,
+    functionName: 'decimals',
+    chainId: monadNetwork.id,
+    query: {enabled:Boolean(address),staleTime:60*60*1000},
+  });
+  const balance = useReadContract({
+    address: appConfig.chogTokenAddress,
+    abi: chogTokenBalanceAbi,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    chainId: monadNetwork.id,
+    query: {enabled:Boolean(address),refetchOnWindowFocus:true,staleTime:30_000},
+  });
+  const loading = Boolean(address) && (balance.isLoading || decimals.isLoading);
+  const error = !address || balance.isError || decimals.isError;
+  const value = balance.data !== undefined && decimals.data !== undefined
+    ? formatChogTokenBalance(balance.data, decimals.data)
+    : null;
+
+  return <section className="surface flex flex-col justify-between gap-4 rounded-[26px] p-5 sm:flex-row sm:items-center sm:px-7" aria-label="Actual CHOG token balance" data-testid="card-chog-token-balance">
+    <div>
+      <Eyebrow>On-chain token balance</Eyebrow>
+      <h2 className="display text-xl font-extrabold text-[#24133f]">$CHOG</h2>
+    </div>
+    <div className="flex items-center gap-3">
+      <p className="min-w-[7rem] text-right text-2xl font-extrabold tabular-nums text-[#24133f]" aria-live="polite" data-testid="text-chog-token-balance">
+        {loading ? 'Loading…' : error ? 'Unavailable' : value ?? 'Unavailable'}
+      </p>
+      <button type="button" onClick={()=>{void decimals.refetch();void balance.refetch();}} disabled={!address || loading} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#e9e0d3] text-[#806c9c] transition hover:bg-[#f2ecff] disabled:opacity-50" aria-label="Refresh $CHOG balance" data-testid="button-refresh-chog-balance">
+        <RefreshCw size={14} className={loading?'animate-spin':''}/>
+      </button>
+    </div>
+  </section>;
+}
+
+function formatChogTokenBalance(value: bigint, decimals: number) {
+  const [whole='0',fraction=''] = formatUnits(value,decimals).split('.');
+  const groupedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  const roundedFraction = fraction.slice(0,4).replace(/0+$/,'');
+  return roundedFraction ? `${groupedWhole}.${roundedFraction}` : groupedWhole;
+}
+
 export function MyChogPage() {
   const me = useGetMe({ query: { queryKey: getGetMeQueryKey(), refetchOnWindowFocus: true } });
   const wallet = me.data?.walletAddress || '';
@@ -33,10 +98,6 @@ export function MyChogPage() {
   const tokenId = (verifiedChogs.some(item=>item.tokenId===selected) ? selected : '') ||
     (verifiedChogs.some(item=>item.tokenId===me.data?.selectedChogTokenId) ? me.data?.selectedChogTokenId : '') ||
     verifiedChogs[0]?.tokenId || '';
-  const tokenKey = getGetChogQueryKey(tokenId);
-  const chog = useGetChog(tokenId, { query:{ enabled:!!tokenId, queryKey:tokenKey } });
-  const ownedCurrent = verifiedChogs.find(item=>item.tokenId===tokenId);
-  const current = chog.data?.verified && chog.data.ownerWallet.toLowerCase()===wallet.toLowerCase() && verifiedChogs.some(item=>item.tokenId===chog.data?.tokenId) ? chog.data : ownedCurrent;
   const qc = useQueryClient();
   const selectActiveChog = useSelectActiveChog();
   const profile = me.data?.profile;
@@ -68,96 +129,70 @@ export function MyChogPage() {
     setNotice('');
   }
   return <AppShell displayName={profile?.displayName}><div className="page-enter">
-    <PageTitle eyebrow="Your verified collection" title="My Chogs." description="Every Chog you own, in one place. Switch your active Chog without changing your profile details." />
+    <PageTitle eyebrow="Your verified collection" title="My Chogs." description="Your owned Chog Genesis NFTs and live $CHOG balance." />
     <QueryState loading={me.isLoading} error={me.isError} retry={()=>void me.refetch()}>
       {!me.data ? <EmptyState title="Connect your wallet first." detail="Your verified collection appears here after wallet sign-in."/> :
-      <QueryState loading={ownership.isLoading} error={ownership.isError} retry={()=>void ownership.refetch()}>
-        {!verifiedChogs.length ? <EmptyState title="No Chog Found" detail="A Chog NFT is required to create a CHOG MATE profile. Connect the wallet that owns a Chog NFT to continue." mark="cm"/> :
-        <div className="space-y-6">
-          <section className="surface rounded-[28px] p-5 sm:p-7">
-            <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
-              <div>
-                <Eyebrow>Chog Genesis</Eyebrow>
-                <h2 className="display text-[25px] font-extrabold text-[#24133f]">Your Chog collection</h2>
-              </div>
-              <p className="text-xs text-[#81758a]">{verifiedChogs.length} verified {verifiedChogs.length===1?'Chog':'Chogs'}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4">
-              {verifiedChogs.map(item => {
-                const isSelected = item.tokenId === tokenId;
-                return <button
-                  type="button"
-                  key={item.tokenId}
-                  onClick={()=>chooseChog(item.tokenId)}
-                  disabled={selectActiveChog.isPending}
-                  aria-pressed={isSelected}
-                  className={`group overflow-hidden rounded-[20px] border-2 bg-white text-left transition hover:-translate-y-0.5 ${isSelected?'border-[#8a63ff] shadow-[0_0_0_3px_#8a63ff1c]':'border-transparent hover:border-[#dacbf3]'}`}
-                  data-testid={`card-owned-chog-${item.tokenId}`}
-                >
-                  <div className="relative aspect-square bg-[#f4eddf]">
-                    <ChogArtwork chog={item}/>
-                    <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border border-white/70 bg-white/85 px-2 py-1 text-[9px] font-bold text-[#447a43] shadow-sm backdrop-blur">
-                      <BadgeCheck size={11}/> Verified
-                    </span>
-                    {me.data.selectedChogTokenId===item.tokenId && <span className="absolute right-2 top-2 rounded-full bg-[#7047ff] px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white">Active</span>}
+      <>
+        <MyChogTokenBalance walletAddress={wallet}/>
+        <QueryState loading={ownership.isLoading} error={ownership.isError} retry={()=>void ownership.refetch()}>
+          {!verifiedChogs.length
+            ? <EmptyState title="No Chog Found" detail="No verified Chog Genesis NFTs are currently owned by this wallet." mark="cm"/>
+            : <section className="surface rounded-[28px] p-5 sm:p-7" aria-label="Owned Chog NFTs" data-testid="section-owned-chogs">
+                <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+                  <div>
+                    <Eyebrow>Chog Genesis</Eyebrow>
+                    <h2 className="display text-[25px] font-extrabold text-[#24133f]">Owned Chogs</h2>
                   </div>
-                  <div className="p-3 sm:p-4">
-                    <p className="display text-base font-extrabold text-[#24133f]">Chog #{item.tokenId}</p>
-                    {item.tier && <p className="mt-1 text-[10px] font-semibold text-[#715795]">Tier: {item.tier}</p>}
-                    <div className="mt-2 flex min-h-7 flex-wrap gap-1">
-                      {item.traits?.slice(0,2).map((trait,index)=><span key={`${trait.traitType}-${index}`} className="max-w-full truncate rounded-full bg-[#f4effb] px-2 py-1 text-[9px] font-semibold text-[#715795]">{trait.traitType}: {trait.traitValue}</span>)}
-                      {!item.traits?.length && <span className="text-[10px] text-[#958a9b]">No trait data returned</span>}
-                    </div>
-                    <span className="mt-3 block text-[10px] font-bold text-[#7047ff]">
-                      {me.data.hasProfile
-                        ? me.data.selectedChogTokenId===item.tokenId
-                          ? 'Active identity · View details'
-                          : selectActiveChog.isPending && selected===item.tokenId
-                            ? 'Switching identity…'
-                            : 'Select as active identity'
-                        : 'Choose for your profile'}
-                    </span>
-                  </div>
-                </button>;
-              })}
-            </div>
-          </section>
-
-          {current && <section className="surface overflow-hidden rounded-[28px]" aria-labelledby="selected-chog-details">
-            <div className="grid md:grid-cols-[minmax(220px,.8fr)_1.2fr]">
-              <div className="aspect-square max-h-[440px] bg-[#f4eddf] md:h-full md:aspect-auto"><ChogArtwork chog={current}/></div>
-              <div className="p-5 sm:p-7">
-                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#eef8ea] px-3 py-2 text-[10px] font-bold uppercase tracking-[.12em] text-[#447a43]" data-testid="status-verified"><BadgeCheck size={13}/>On-chain ownership verified</div>
-                <Eyebrow>Selected NFT</Eyebrow>
-                <h2 id="selected-chog-details" className="display break-all text-[32px] font-extrabold tracking-[-.06em] text-[#24133f]" data-testid="text-token-id">Chog #{current.tokenId}</h2>
-                {current.name && <p className="mt-1 text-sm text-[#766a80]">{current.name}</p>}
-                {current.tier && <p className="mt-2 inline-flex rounded-full bg-[#f2ecff] px-3 py-1.5 text-xs font-bold text-[#6246b0]" data-testid="text-chog-tier">Tier: {current.tier}</p>}
-                {current.description && <p className="mt-3 max-w-xl text-sm leading-6 text-[#766a80]" data-testid="text-chog-description">{current.description}</p>}
-                <div className="mt-5 space-y-2.5 text-xs text-[#80748b]">
-                  <div className="flex items-start gap-2"><Wallet size={14} className="mt-0.5 shrink-0"/><span className="break-all" data-testid="text-owner-wallet">{current.ownerWallet}</span></div>
-                  <div className="flex items-center gap-2"><ShieldCheck size={14}/><span>Contract: <span className="break-all">{current.contractAddress}</span></span></div>
+                  <p className="text-xs text-[#81758a]" data-testid="text-owned-chog-count">{verifiedChogs.length} owned {verifiedChogs.length===1?'Chog':'Chogs'}</p>
                 </div>
-                {current.metadataUrl && <a href={current.metadataUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-[#7047ff]" data-testid="link-nft-metadata">View NFT metadata <ExternalLink size={13}/></a>}
-                <div className="mt-6 border-t border-[#24133f10] pt-5">
-                  <h3 className="display text-lg font-extrabold text-[#24133f]">Traits</h3>
-                  {current.traits?.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{current.traits.map((trait,index)=><div key={`${trait.traitType}-${index}`} className="flex items-start justify-between gap-3 rounded-2xl bg-[#faf6ef] px-3 py-2.5" data-testid={`trait-${index}`}><span className="text-[11px] font-medium text-[#887c91]">{trait.traitType}</span><span className="text-right text-[11px] font-bold text-[#453454]">{trait.traitValue}{typeof trait.rarity==='number' && <span className="mt-1 block text-[9px] font-medium text-[#9a8da0]">Rarity {trait.rarity}%</span>}</span></div>)}</div> : <p className="mt-3 rounded-2xl border border-dashed border-[#ded4c7] px-4 py-4 text-xs leading-5 text-[#897e8e]" data-testid="state-no-traits">No trait metadata was returned for this Chog. We won’t guess at what isn’t there.</p>}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {verifiedChogs.map(item=>{
+                    const isSelected = item.tokenId===tokenId;
+                    const isActive = item.tokenId===me.data.selectedChogTokenId;
+                    return <article
+                      key={item.tokenId}
+                      className={`overflow-hidden rounded-[22px] border-2 bg-white transition ${isSelected?'border-[#8a63ff] shadow-[0_0_0_3px_#8a63ff1c]':'border-transparent'}`}
+                      data-testid={`card-owned-chog-${item.tokenId}`}
+                    >
+                      <div className="relative aspect-square bg-[#f4eddf]">
+                        {item.imageUrl
+                          ? <img src={item.imageUrl} alt={`Chog #${item.tokenId}`} className="h-full w-full object-contain" data-testid={`img-owned-chog-${item.tokenId}`}/>
+                          : <div className="grid h-full place-items-center bg-[#f7f2e9] px-5 text-center text-sm font-semibold text-[#81758a]" role="status">Real artwork is unavailable for Chog #{item.tokenId}.</div>}
+                        {isActive && <span className="absolute right-3 top-3 rounded-full bg-[#7047ff] px-3 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white" data-testid={`status-active-chog-${item.tokenId}`}>Active profile Chog</span>}
+                      </div>
+                      <div className="p-4 sm:p-5">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <h3 className="display text-lg font-extrabold text-[#24133f]" data-testid={`text-owned-chog-token-id-${item.tokenId}`}>Chog #{item.tokenId}</h3>
+                          <span className="shrink-0 text-[10px] font-semibold text-[#715795]" data-testid={`text-owned-chog-tier-${item.tokenId}`}>{item.tier ? `Tier: ${item.tier}` : 'Tier unavailable'}</span>
+                        </div>
+                        <div className="mt-4 border-t border-[#eee7e0] pt-3">
+                          <h4 className="text-[9px] font-bold uppercase tracking-[.16em] text-[#a28d9b]">Traits</h4>
+                          {item.traits?.length
+                            ? <dl className="mt-2 space-y-2">
+                                {item.traits.map((trait,index)=><div key={`${trait.traitType}-${index}`} className="flex items-start justify-between gap-3 rounded-xl bg-[#faf6ef] px-3 py-2" data-testid={`trait-${item.tokenId}-${index}`}>
+                                  <dt className="text-[10px] font-medium text-[#887c91]">{trait.traitType}</dt>
+                                  <dd className="text-right text-[10px] font-bold text-[#453454]">{trait.traitValue}{typeof trait.rarity==='number' && <span className="ml-1 font-medium text-[#9a8da0]">({trait.rarity}%)</span>}</dd>
+                                </div>)}
+                              </dl>
+                            : <p className="mt-2 text-[10px] text-[#958a9b]">No real trait metadata returned.</p>}
+                        </div>
+                        <button type="button" onClick={()=>chooseChog(item.tokenId)} disabled={selectActiveChog.isPending || isActive} aria-pressed={isSelected} className="mt-4 w-full rounded-full border border-[#e6ddf2] px-4 py-2.5 text-[10px] font-bold text-[#7047ff] transition hover:bg-[#f6f1ff] disabled:cursor-default disabled:opacity-60" data-testid={`button-select-owned-chog-${item.tokenId}`} aria-live="polite">
+                          {me.data.hasProfile
+                            ? isActive
+                              ? 'Active profile Chog'
+                              : selectActiveChog.isPending && selected===item.tokenId
+                                ? 'Switching active Chog…'
+                                : 'Set as active profile Chog'
+                            : isSelected ? 'Selected for your profile' : 'Select Chog'}
+                        </button>
+                      </div>
+                    </article>;
+                  })}
                 </div>
-                {chog.isError && <p className="mt-4 text-xs text-[#aa4848]" data-testid="status-token-error">Token metadata could not be refreshed. The collection listing still comes from verified wallet ownership.</p>}
-                {!me.data.hasProfile ? <Link href={`/profile?chog=${encodeURIComponent(current.tokenId)}`} className="button-primary mt-5 inline-flex rounded-full px-5 py-3 text-xs font-bold" data-testid="link-create-profile">Create your profile with Chog #{current.tokenId}</Link> :
-                  <p className="mt-5 text-xs font-semibold text-[#447a43]" role="status" data-testid="status-active-chog">
-                    {me.data.selectedChogTokenId===current.tokenId
-                      ? `Chog #${current.tokenId} is your active identity.`
-                      : selectActiveChog.isPending
-                        ? `Switching to Chog #${current.tokenId}…`
-                        : 'Select a Chog above to make it your active identity.'}
-                  </p>}
-                {selectActiveChog.isPending && <p className="mt-2 text-xs text-[#7047ff]" role="status">Revalidating ownership and switching your Chog…</p>}
-                {notice && <p className={`mt-3 rounded-xl px-3 py-2 text-xs ${notice.startsWith('Chog #')?'bg-[#eef8ea] text-[#447a43]':'bg-[#fff2ec] text-[#914c3c]'}`} role="status">{notice}</p>}
-              </div>
-            </div>
-          </section>}
-        </div>}
-      </QueryState>}
+                {notice && <p className={`mt-5 rounded-xl px-4 py-3 text-xs ${notice.startsWith('Chog #')?'bg-[#eef8ea] text-[#447a43]':'bg-[#fff2ec] text-[#914c3c]'}`} role="status" data-testid="status-active-chog-change">{notice}</p>}
+              </section>}
+        </QueryState>
+      </>}
     </QueryState>
   </div></AppShell>;
 }
