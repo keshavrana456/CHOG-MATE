@@ -27,9 +27,11 @@ import ManualAddressScan from "@/components/manual-address-scan";
 export default function WalletAuthPanel({
   autoOpen = false,
   showManualAddressScan = true,
+  returnTo,
 }: {
   autoOpen?: boolean;
   showManualAddressScan?: boolean;
+  returnTo?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [openingWallet, setOpeningWallet] = useState(false);
@@ -72,6 +74,7 @@ export default function WalletAuthPanel({
             chog.ownerWallet.toLowerCase() === address?.toLowerCase(),
         )
       : [];
+  const requestedDestination = safeInternalReturnTo(returnTo);
   const isConnecting =
     connection.isConnecting ||
     connection.isReconnecting ||
@@ -187,7 +190,10 @@ export default function WalletAuthPanel({
       });
       if (sessionError) throw sessionError;
       await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-      let destination = "/my-chog";
+      let destination =
+        requestedDestination?.startsWith("/profile")
+          ? requestedDestination
+          : "/my-chog";
       if (session.hasChog) {
         try {
           const current = await queryClient.fetchQuery({
@@ -195,7 +201,9 @@ export default function WalletAuthPanel({
             queryFn: () => getMe(),
             staleTime: 0,
           });
-          if (current.hasProfile && current.profile) destination = "/discover";
+          if (current.hasProfile && current.profile) {
+            destination = requestedDestination ?? "/discover";
+          }
         } catch {
           // If the profile lookup is unavailable, land on the ownership gallery.
         }
@@ -259,7 +267,7 @@ export default function WalletAuthPanel({
           )}
         </div>
       </div>
-      {showManualAddressScan && <ManualAddressScan />}
+      {showManualAddressScan && <ManualAddressScan returnTo={returnTo} />}
       {isWrongNetwork && (
         <div
           className="mt-3 flex flex-col gap-2 rounded-2xl border border-[#ead8ce] bg-[#fff8f1] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -427,4 +435,17 @@ export default function WalletAuthPanel({
       )}
     </div>
   );
+}
+
+function safeInternalReturnTo(value?: string): string | undefined {
+  if (
+    !value ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("\\") ||
+    /[\r\n]/.test(value)
+  ) {
+    return undefined;
+  }
+  return value;
 }

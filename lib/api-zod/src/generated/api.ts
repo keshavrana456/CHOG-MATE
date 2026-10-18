@@ -36,6 +36,14 @@ export const CreateAuthChallengeResponse = zod.object({
 
 
 /**
+ * @summary Check whether the current CHOG MATE session is valid
+ */
+export const GetAuthSessionResponse = zod.object({
+  "authenticated": zod.boolean()
+})
+
+
+/**
  * @summary Verify a wallet signature and start a session
  */
 export const verifyWalletBodyWalletAddressRegExp = new RegExp('^0x[a-fA-F0-9]{40}$');

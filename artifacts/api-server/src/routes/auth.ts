@@ -1,12 +1,12 @@
 import { Router, type IRouter } from "express";
 import {
-  AuthSessionStatus,
   CreateAddressSessionBody,
   CreateAddressSessionResponse,
   CreateAuthChallengeBody,
   CreateAuthChallengeResponse,
   VerifyWalletBody,
   VerifyWalletResponse,
+  GetAuthSessionResponse,
 } from "@workspace/api-zod";
 import { getAddress } from "viem";
 import { getOwnedChogs } from "../lib/chogs";
@@ -25,7 +25,8 @@ const router: IRouter = Router();
 
 router.get("/auth/session", (req, res): void => {
   const session = readWalletSession(req);
-  res.json(AuthSessionStatus.parse({ authenticated: Boolean(session) }));
+  res.setHeader("Cache-Control", "no-store");
+  res.json(GetAuthSessionResponse.parse({ authenticated: Boolean(session) }));
 });
 
 router.post("/auth/challenge", async (req, res): Promise<void> => {

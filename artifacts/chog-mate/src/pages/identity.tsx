@@ -6,7 +6,7 @@ import { Link, useLocation } from 'wouter';
 import { isAddress } from 'viem';
 import { useConnection, useDisconnect } from 'wagmi';
 import {
-  getGetChogQueryKey, getGetMeQueryKey, getGetNftOwnershipQueryKey,
+  getGetAuthSessionQueryKey, getGetChogQueryKey, getGetMeQueryKey, getGetNftOwnershipQueryKey,
   useGetChog, useGetMe, useGetNftOwnership, useLogoutWallet, useSelectActiveChog, useUpdateMeProfile,
 } from '@workspace/api-client-react';
 import type { Chog, Profile, ProfileInput } from '@workspace/api-client-react';
@@ -800,7 +800,25 @@ export function SettingsPage() {
       await qc.invalidateQueries({queryKey:getGetMeQueryKey()}); setMessage('Discovery visibility updated.');
     } catch {setMessage('We couldn’t update visibility. Please try again.');}
   }
-  async function signOut() { if(!window.confirm('Disconnect this wallet from CHOG MATE?')) return; try { await logout.mutateAsync(); if(supabase) await supabase.auth.signOut(); if(walletConnection.connector) await walletDisconnect.disconnectAsync({connector:walletConnection.connector}); await qc.clear(); navigate('/'); } catch { setMessage('Sign out did not complete. Please try again.'); } }
+  async function signOut() {
+    if (!window.confirm('Disconnect this wallet from CHOG MATE?')) return;
+    try {
+      await logout.mutateAsync();
+    } catch {
+      setMessage('Sign out did not complete. Please try again.');
+      return;
+    }
+
+    qc.setQueryData(getGetAuthSessionQueryKey(), { authenticated: false });
+    await qc.cancelQueries();
+    qc.clear();
+    navigate('/');
+
+    if (supabase) void supabase.auth.signOut();
+    if (walletConnection.connector) {
+      void walletDisconnect.disconnectAsync({ connector: walletConnection.connector });
+    }
+  }
   return <AppShell displayName={profile?.displayName}><div className="page-enter">
     <PageTitle eyebrow="Your space, your rules" title="Settings." description="Keep your account comfortable, visible on your terms, and safe." />
     <div className="grid gap-5 lg:grid-cols-[220px_1fr]">

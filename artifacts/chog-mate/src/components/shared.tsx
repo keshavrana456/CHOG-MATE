@@ -1,9 +1,11 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { BadgeCheck, Compass, Heart, House, Image, MessageCircle, Settings, UserRound } from 'lucide-react';
+import { BadgeCheck, Compass, Heart, House, Image, MessageCircle, Settings, UserRound, Wallet } from 'lucide-react';
 import type { Chog, Profile } from '@workspace/api-client-react';
+import { getGetAuthSessionQueryKey, useGetAuthSession } from '@workspace/api-client-react';
 import { ChogBalance } from '@/components/chog-balance';
 import { NotificationCenter } from '@/components/notification-center';
+import { WalletConnectionDialog } from '@/components/wallet-connection-dialog';
 
 export function Brand({ inverse = false }: { inverse?: boolean }) {
   return <Link href="/" className="inline-flex items-center gap-3" data-testid="link-brand">
@@ -26,11 +28,25 @@ const links = [
   { href: '/my-chog', label: 'My Chog', icon: Image },
   { href: '/profile', label: 'My Profile', icon: UserRound },
 ];
+const publicLinks = links.slice(0, 2);
 const mobileLinks = links.filter(({ href }) => href !== '/my-chog');
 
 export function AppShell({ children, displayName }: { children: ReactNode; displayName?: string }) {
   const [path] = useLocation();
   const [headerHidden, setHeaderHidden] = useState(false);
+  const [walletDialogOpen, setWalletDialogOpen] = useState(false);
+  const authSession = useGetAuthSession({
+    query: {
+      queryKey: getGetAuthSessionQueryKey(),
+      retry: false,
+      refetchOnWindowFocus: true,
+      refetchInterval: 60_000,
+      staleTime: 0,
+    },
+  });
+  const authenticated =
+    authSession.data?.authenticated === true && !authSession.isError;
+  const currentRoute = `${path}${window.location.search}${window.location.hash}`;
 
   useEffect(() => {
     let previousScrollY = window.scrollY;
@@ -55,19 +71,27 @@ export function AppShell({ children, displayName }: { children: ReactNode; displ
       <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-5 md:px-9">
         <Brand />
         <nav className="nav-glass hidden items-center gap-0.5 rounded-full p-1 md:flex" aria-label="Main navigation">
-          {links.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} data-testid={`link-nav-${label.toLowerCase().replace(' ', '-')}`} className={`nav-link flex items-center gap-1.5 rounded-full px-2 py-2 text-[11px] font-semibold lg:gap-2 lg:px-2.5 lg:text-xs xl:px-3 xl:text-[13px] ${path === href ? 'active' : ''}`}><Icon size={14} strokeWidth={2.2} />{label}</Link>)}
+          {(authenticated ? links : publicLinks).map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} data-testid={`link-nav-${label.toLowerCase().replace(' ', '-')}`} className={`nav-link flex items-center gap-1.5 rounded-full px-2 py-2 text-[11px] font-semibold lg:gap-2 lg:px-2.5 lg:text-xs xl:px-3 xl:text-[13px] ${path === href ? 'active' : ''}`}><Icon size={14} strokeWidth={2.2} />{label}</Link>)}
         </nav>
         <div className="flex items-center gap-2">
-          <ChogBalance />
-          <NotificationCenter />
-          <Link href="/settings" className="glass-icon-button grid h-10 w-10 place-items-center rounded-full transition" aria-label="Settings" aria-current={path === '/settings' ? 'page' : undefined} data-testid="link-settings"><Settings size={16}/></Link>
+          {authenticated ? <>
+            <ChogBalance />
+            <NotificationCenter />
+            <Link href="/settings" className="glass-icon-button grid h-10 w-10 place-items-center rounded-full transition" aria-label="Settings" aria-current={path === '/settings' ? 'page' : undefined} data-testid="link-settings"><Settings size={16}/></Link>
+          </> : <button type="button" onClick={() => setWalletDialogOpen(true)} className="button-primary hidden h-10 items-center gap-2 rounded-full px-4 text-xs font-bold md:inline-flex" data-testid="button-nav-connect-wallet"><Wallet size={14}/>Connect Wallet</button>}
         </div>
       </div>
     </header>
     <main className="relative z-[1] mx-auto w-full max-w-[1440px] px-5 pb-28 pt-7 md:px-9 md:pb-12 md:pt-10">{children}</main>
-    <nav className={`mobile-tabbar fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 md:hidden ${headerHidden ? 'is-hidden' : ''}`} aria-label="Mobile navigation">
-      {mobileLinks.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} className={`mobile-tab flex flex-col items-center gap-1 rounded-xl py-1.5 text-[9px] font-semibold ${path === href ? 'active' : ''}`} data-testid={`mobile-nav-${label.toLowerCase().replace(' ', '-')}`}><Icon size={18} strokeWidth={2} />{label === 'My Profile' ? 'Profile' : label}</Link>)}
+    <nav className={`mobile-tabbar fixed bottom-0 left-0 right-0 z-30 grid ${authenticated ? 'grid-cols-5' : 'grid-cols-3'} px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 md:hidden ${headerHidden ? 'is-hidden' : ''}`} aria-label="Mobile navigation">
+      {(authenticated ? mobileLinks : publicLinks).map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={path === href ? 'page' : undefined} className={`mobile-tab flex flex-col items-center gap-1 rounded-xl py-1.5 text-[9px] font-semibold ${path === href ? 'active' : ''}`} data-testid={`mobile-nav-${label.toLowerCase().replace(' ', '-')}`}><Icon size={18} strokeWidth={2} />{label === 'My Profile' ? 'Profile' : label}</Link>)}
+      {!authenticated && <button type="button" onClick={() => setWalletDialogOpen(true)} className="mobile-tab flex flex-col items-center gap-1 rounded-xl py-1.5 text-[9px] font-semibold" data-testid="mobile-nav-connect-wallet"><Wallet size={18} strokeWidth={2}/>Connect Wallet</button>}
     </nav>
+    <WalletConnectionDialog
+      open={walletDialogOpen}
+      onOpenChange={setWalletDialogOpen}
+      returnTo={currentRoute}
+    />
   </div>;
 }
 

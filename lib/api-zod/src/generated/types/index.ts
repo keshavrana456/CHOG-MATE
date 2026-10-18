@@ -8,6 +8,7 @@
 
 export * from './apiErrorResponse';
 export * from './authChallenge';
+export * from './authSessionStatus';
 export * from './blockInput';
 export * from './chog';
 export * from './chogSelectionInput';

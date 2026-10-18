@@ -19,7 +19,7 @@ import {
   writeManualTestFlow,
 } from "@/lib/manual-test-profile";
 
-export default function ManualAddressScan() {
+export default function ManualAddressScan({ returnTo }: { returnTo?: string }) {
   const [restoredFlow] = useState(readManualTestFlow);
   const [scanInput, setScanInput] = useState(restoredFlow?.walletAddress ?? "");
   const [scanAddress, setScanAddress] = useState(restoredFlow?.walletAddress ?? "");
@@ -124,7 +124,16 @@ export default function ManualAddressScan() {
           queryFn: () => getMe(),
           staleTime: 0,
         });
-        if (current.hasProfile && current.profile) destination = "/discover";
+        if (current.hasProfile && current.profile) {
+          destination =
+            returnTo &&
+            returnTo.startsWith("/") &&
+            !returnTo.startsWith("//") &&
+            !returnTo.includes("\\") &&
+            !/[\r\n]/.test(returnTo)
+              ? returnTo
+              : "/discover";
+        }
       } catch {
         // Continue to profile setup; the page will show a retry state if the
         // account profile cannot be loaded.

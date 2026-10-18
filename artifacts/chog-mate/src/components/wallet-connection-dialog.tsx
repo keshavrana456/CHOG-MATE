@@ -12,9 +12,11 @@ const WalletAuthPanel = lazy(() => import('@/components/wallet-auth'));
 export function WalletConnectionDialog({
   open,
   onOpenChange,
+  returnTo,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  returnTo?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -37,7 +39,7 @@ export function WalletConnectionDialog({
             </div>
           }
         >
-          <WalletAuthPanel showManualAddressScan />
+          <WalletAuthPanel showManualAddressScan returnTo={returnTo} />
         </Suspense>
         </div>
       </DialogContent>

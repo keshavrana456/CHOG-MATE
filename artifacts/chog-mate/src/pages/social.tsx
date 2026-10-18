@@ -3,10 +3,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, BadgeCheck, FileText, Heart, Image as ImageIcon, MessageCircle, Mic, MoreHorizontal, Paperclip, Send, Sparkles, Video, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import {
+  getGetAuthSessionQueryKey,
   getDiscoverProfilesQueryKey, getGetMatchesQueryKey, getGetMessagesQueryKey,
   getGetMeQueryKey, getGetLikeInboxQueryKey,
   useBlockProfile, useDiscoverProfiles, useGetMatches, useGetMessages,
-  useGetLikeInbox, useGetMe, useReportProfile, useRequestMessageAttachmentUploadUrl, useSendMessage, useSwipeProfile, useUnmatchProfile,
+  useGetAuthSession, useGetLikeInbox, useGetMe, useReportProfile, useRequestMessageAttachmentUploadUrl, useSendMessage, useSwipeProfile, useUnmatchProfile,
 } from '@workspace/api-client-react';
 import { type DiscoverProfilesMode, type DiscoverProfilesParams, type LikeInboxItem, type Profile, ReportInputReason } from '@workspace/api-client-react';
 import { formatUnits, type Hex } from 'viem';
@@ -283,7 +284,7 @@ function SuperLikeDialog({
     if (!canUseWallet || !connection.address || !walletMatchesSession) {
       setError(
         identityMode === 'address_only'
-          ? 'Address-only accounts cannot send transactions. Connect and sign in with the wallet for this profile first.'
+          ? 'Connect your wallet to continue.'
           : 'Connect the wallet used for this verified profile on Monad Mainnet.',
       );
       return;
@@ -366,7 +367,7 @@ function SuperLikeDialog({
         </div>
         {!connection.isConnected && <p className="text-xs leading-5 text-[#8b8091]">Connect the wallet used for your CHOG MATE profile to continue.</p>}
         {connection.isConnected && connection.chainId !== monadNetwork.id && <p className="text-xs text-[#a34646]" role="alert">Switch your wallet to Monad Mainnet before sending.</p>}
-        {identityMode === 'address_only' && <p className="text-xs leading-5 text-[#a34646]" role="alert">This address-only account can like and message, but cannot send $CHOG until its wallet is connected and verified.</p>}
+        {identityMode === 'address_only' && <p className="text-xs leading-5 text-[#a34646]" role="alert">Connect your wallet to continue. Address-only accounts can like and message, but cannot sign blockchain transactions.</p>}
         {phase && <p className="text-xs font-semibold text-[#7053a4]" role="status">{phase}</p>}
         {transactionHash && (
           <a href={`https://monadscan.com/tx/${transactionHash}`} target="_blank" rel="noreferrer" className="break-all text-xs font-semibold text-[#7047ff] underline">
@@ -422,8 +423,20 @@ export function DiscoverPage() {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
   const swipe = useSwipeProfile();
+  const authSession = useGetAuthSession({
+    query: {
+      queryKey: getGetAuthSessionQueryKey(),
+      retry: false,
+      refetchOnWindowFocus: true,
+      refetchInterval: 60_000,
+      staleTime: 0,
+    },
+  });
+  const authSessionValid =
+    authSession.data?.authenticated === true && !authSession.isError;
   const me = useGetMe({ query: { queryKey: getGetMeQueryKey(), retry: false } });
   const canInteract = Boolean(
+    authSessionValid &&
     me.data &&
     isDiscoverReadyProfile(me.data.profile, me.data.walletAddress),
   );
@@ -470,8 +483,8 @@ export function DiscoverPage() {
 
   function action(selected: 'pass'|'like'|'super_like') {
     if (!canInteract) {
-      if (me.data) navigate('/profile');
-      else setWalletDialogOpen(true);
+      if (!authSessionValid) setWalletDialogOpen(true);
+      else navigate('/profile');
       return;
     }
     const profile = profiles[profileIndex];
@@ -510,7 +523,7 @@ export function DiscoverPage() {
         setSuperLikeTarget(null);
       }}
     />
-    <WalletConnectionDialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}/>
+    <WalletConnectionDialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen} returnTo="/discover"/>
   </div></AppShell>;
 }
 
@@ -527,7 +540,7 @@ export function MatchesPage() {
   const matches = data || [];
   if (me.isLoading) return <AppShell><div className="skeleton h-96 rounded-[28px]"/></AppShell>;
   if (me.isError && !isUnauthorized(me.error)) return <AppShell><QueryState loading={false} error retry={()=>void me.refetch()}><div/></QueryState></AppShell>;
-  if (!me.data) return <AppShell><div className="page-enter"><PageTitle eyebrow="The feeling is mutual" title="Your matches." description="Sign in to view your mutual connections."/><EmptyState title="Connect your wallet to continue." detail="Your matches are private. Verify your wallet to view them."/></div><WalletConnectionDialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}/></AppShell>;
+  if (!me.data) return <AppShell><div className="page-enter"><PageTitle eyebrow="The feeling is mutual" title="Your matches." description="Sign in to view your mutual connections."/><EmptyState title="Connect your wallet to continue." detail="Your matches are private. Verify your wallet to view them."/></div><WalletConnectionDialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen} returnTo="/matches"/></AppShell>;
   return <AppShell><div className="page-enter">
     <PageTitle eyebrow="The feeling is mutual" title="Your matches." description="Only real mutual connections live here. Take a look around." />
     <section className="mb-8" aria-labelledby="incoming-likes-title">
@@ -814,7 +827,7 @@ export function MessagesPage() {
   const [walletDialogOpen, setWalletDialogOpen] = useState(true);
   if (currentProfile.isLoading) return <AppShell><div className="skeleton h-96 rounded-[28px]"/></AppShell>;
   if (currentProfile.isError && !isUnauthorized(currentProfile.error)) return <AppShell><QueryState loading={false} error retry={()=>void currentProfile.refetch()}><div/></QueryState></AppShell>;
-  if (!currentProfile.data) return <AppShell><div className="page-enter"><PageTitle eyebrow="Your conversations" title="Messages." description="Sign in to view or send messages."/><EmptyState title="Connect your wallet to continue." detail="Messages are available after you verify your wallet and make a mutual match."/></div><WalletConnectionDialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}/></AppShell>;
+  if (!currentProfile.data) return <AppShell><div className="page-enter"><PageTitle eyebrow="Your conversations" title="Messages." description="Sign in to view or send messages."/><EmptyState title="Connect your wallet to continue." detail="Messages are available after you verify your wallet and make a mutual match."/></div><WalletConnectionDialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen} returnTo="/messages"/></AppShell>;
   if (matchesLoading) return <AppShell><div className="skeleton h-96 rounded-[28px]"/></AppShell>;
   if (matchesError) return <AppShell><QueryState loading={false} error retry={()=>void retryMatches()}><div/></QueryState></AppShell>;
   if (!matches?.length) return <AppShell><PageTitle eyebrow="A good conversation starts here" title="Messages."/><EmptyState title="No chats just yet." detail="A conversation opens after a mutual match. Your messages will be waiting here." action={<Link href="/discover" className="button-primary rounded-full px-5 py-3 text-sm font-bold" data-testid="link-discover-from-messages">Discover holders</Link>}/></AppShell>;

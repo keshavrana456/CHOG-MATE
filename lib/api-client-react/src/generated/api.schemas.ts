@@ -26,6 +26,10 @@ export interface AuthChallenge {
   expiresAt: string;
 }
 
+export interface AuthSessionStatus {
+  authenticated: boolean;
+}
+
 export interface WalletSignatureInput {
   /** @pattern ^0x[a-fA-F0-9]{40}$ */
   walletAddress: string;

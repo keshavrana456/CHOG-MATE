@@ -92,7 +92,7 @@ router.post("/swipes", async (req, res): Promise<void> => {
     session.identityMode !== "wallet_connected"
   ) {
     res.status(403).json({
-      error: "Address-only accounts cannot send token transactions. Connect and verify the wallet first.",
+      error: "Connect your wallet to continue.",
     });
     return;
   }
